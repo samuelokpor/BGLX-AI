@@ -1,0 +1,6 @@
+bglx_ws/build/
+bglx_ws/install/
+bglx_ws/log/
+__pycache__/
+*.pyc
+*.pyo

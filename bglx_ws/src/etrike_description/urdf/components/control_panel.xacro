@@ -1,0 +1,190 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================================== -->
+  <!-- CONTROL PANEL - A-frame structure with angled carbon fiber panel   -->
+  <!-- Matches BGLX design with triangular support and tilted screen      -->
+  <!-- ================================================================== -->
+
+  <xacro:property name="panel_width" value="0.20"/>            <!-- Screen width -->
+  <xacro:property name="panel_height" value="0.15"/>           <!-- Screen height -->
+  <xacro:property name="panel_thickness" value="0.015"/>       <!-- Panel thickness -->
+  <xacro:property name="panel_tilt" value="${25*pi/180}"/>     <!-- Tilt angle (25 degrees) -->
+
+  <xacro:macro name="control_panel" params="parent">
+
+    <!-- ============================================================== -->
+    <!-- A-FRAME BASE - Triangular support structure                    -->
+    <!-- ============================================================== -->
+    
+    <!-- Left A-frame leg -->
+    <link name="aframe_leg_left">
+      <inertial>
+        <mass value="0.3"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.3" r="0.015" l="0.35"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0.175" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.015" length="0.35"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.175" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.015" length="0.35"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="aframe_leg_left_joint" type="fixed">
+      <parent link="frame_main_spine"/>
+      <child link="aframe_leg_left"/>
+      <!-- Positioned on main spine, angled outward -->
+      <origin xyz="0.75 0.08 0" rpy="0 ${-15*pi/180} ${10*pi/180}"/>
+    </joint>
+
+    <!-- Right A-frame leg -->
+    <link name="aframe_leg_right">
+      <inertial>
+        <mass value="0.3"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.3" r="0.015" l="0.35"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0.175" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.015" length="0.35"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.175" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.015" length="0.35"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="aframe_leg_right_joint" type="fixed">
+      <parent link="frame_main_spine"/>
+      <child link="aframe_leg_right"/>
+      <origin xyz="0.75 -0.08 0" rpy="0 ${-15*pi/180} ${-10*pi/180}"/>
+    </joint>
+
+    <!-- A-frame cross bar (connects top of legs) -->
+    <link name="aframe_crossbar">
+      <inertial>
+        <mass value="0.2"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.2" r="0.012" l="0.12"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="0.012" length="0.12"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="0.012" length="0.12"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="aframe_crossbar_joint" type="fixed">
+      <parent link="aframe_leg_left"/>
+      <child link="aframe_crossbar"/>
+      <origin xyz="0.05 -0.06 0.30" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- CONTROL PANEL - Carbon fiber panel with screen                 -->
+    <!-- ============================================================== -->
+    
+    <!-- Carbon fiber backing panel -->
+    <link name="control_panel_backing">
+      <inertial>
+        <mass value="0.4"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:box_inertia m="0.4" x="${panel_thickness}" y="${panel_width + 0.04}" z="${panel_height + 0.06}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${panel_thickness} ${panel_width + 0.04} ${panel_height + 0.06}"/>
+        </geometry>
+        <material name="carbon_fiber"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${panel_thickness} ${panel_width + 0.04} ${panel_height + 0.06}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="control_panel_backing_joint" type="fixed">
+      <parent link="aframe_crossbar"/>
+      <child link="control_panel_backing"/>
+      <!-- Tilted back for viewing angle -->
+      <origin xyz="0.02 0 0.05" rpy="0 ${panel_tilt} 0"/>
+    </joint>
+
+    <!-- Screen -->
+    <link name="screen">
+      <inertial>
+        <mass value="0.3"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:box_inertia m="0.3" x="0.01" y="${panel_width}" z="${panel_height}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.01 ${panel_width} ${panel_height}"/>
+        </geometry>
+        <material name="screen"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.01 ${panel_width} ${panel_height}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="screen_joint" type="fixed">
+      <parent link="control_panel_backing"/>
+      <child link="screen"/>
+      <origin xyz="${panel_thickness/2 + 0.005} 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <!-- BGLX indicator light (green LED strip at bottom) -->
+    <link name="indicator_light">
+      <inertial>
+        <mass value="0.05"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:dummy_inertia/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.008 0.10 0.008"/>
+        </geometry>
+        <material name="bglx_green"/>
+      </visual>
+    </link>
+
+    <joint name="indicator_light_joint" type="fixed">
+      <parent link="control_panel_backing"/>
+      <child link="indicator_light"/>
+      <origin xyz="${panel_thickness/2 + 0.005} 0 ${-panel_height/2 - 0.015}" rpy="0 0 0"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>

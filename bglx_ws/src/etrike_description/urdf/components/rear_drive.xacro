@@ -1,0 +1,188 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================================== -->
+  <!-- REAR DRIVE - Swing arm, hub motors, and driven wheels              -->
+  <!-- Differential drive: two independently driven rear wheels           -->
+  <!-- Phase 1: Rigid mount (no suspension) for stability                 -->
+  <!-- ================================================================== -->
+
+  <!-- Wheel dimensions -->
+  <xacro:property name="rear_wheel_radius" value="0.175"/>     <!-- 350mm diameter (14") -->
+  <xacro:property name="rear_wheel_width" value="0.06"/>       <!-- 60mm tire width -->
+  <xacro:property name="rear_wheel_mass" value="3.0"/>         <!-- Includes hub motor -->
+  
+  <!-- Hub motor dimensions -->
+  <xacro:property name="hub_motor_radius" value="0.08"/>       <!-- Motor housing radius -->
+  <xacro:property name="hub_motor_width" value="0.05"/>        <!-- Motor housing width -->
+
+  <!-- Track width -->
+  <xacro:property name="track_width" value="0.75"/>            <!-- Wheel center to wheel center -->
+
+  <!-- Swing arm dimensions -->
+  <xacro:property name="swingarm_length" value="0.30"/>
+  <xacro:property name="swingarm_tube_radius" value="0.02"/>
+
+  <!-- Wheel macro (reusable for left and right) -->
+  <xacro:macro name="rear_wheel" params="prefix y_offset">
+    
+    <!-- Swing arm (fixed to frame for Phase 1) -->
+    <link name="${prefix}_swingarm">
+      <inertial>
+        <mass value="1.0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="1.0" r="${swingarm_tube_radius}" l="${swingarm_length}"/>
+      </inertial>
+      <visual>
+        <origin xyz="${-swingarm_length/2} 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${swingarm_tube_radius}" length="${swingarm_length}"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="${-swingarm_length/2} 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${swingarm_tube_radius}" length="${swingarm_length}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}_swingarm_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${prefix}_swingarm"/>
+      <origin xyz="0.08 ${y_offset} 0.20" rpy="0 ${-10*pi/180} 0"/>
+    </joint>
+
+    <!-- Spring mount (visual only for Phase 1) -->
+    <link name="${prefix}_spring">
+      <inertial>
+        <mass value="0.3"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.3" r="0.025" l="0.15"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.025" length="0.15"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.025" length="0.15"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}_spring_joint" type="fixed">
+      <parent link="${prefix}_swingarm"/>
+      <child link="${prefix}_spring"/>
+      <origin xyz="${-swingarm_length * 0.6} ${y_offset * 0.15} 0.10" rpy="0 ${20*pi/180} 0"/>
+    </joint>
+
+    <!-- Hub motor housing -->
+    <link name="${prefix}_hub_motor">
+      <inertial>
+        <mass value="2.0"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="2.0" r="${hub_motor_radius}" l="${hub_motor_width}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${hub_motor_radius}" length="${hub_motor_width}"/>
+        </geometry>
+        <material name="hub_motor"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${hub_motor_radius}" length="${hub_motor_width}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${prefix}_hub_motor_joint" type="fixed">
+      <parent link="${prefix}_swingarm"/>
+      <child link="${prefix}_hub_motor"/>
+      <origin xyz="${-swingarm_length + 0.02} 0 ${-0.03}" rpy="0 ${10*pi/180} 0"/>
+    </joint>
+
+    <!-- Wheel (continuous rotation) -->
+    <link name="${prefix}_wheel">
+      <inertial>
+        <mass value="${rear_wheel_mass}"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:wheel_inertia m="${rear_wheel_mass}" r="${rear_wheel_radius}" w="${rear_wheel_width}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${rear_wheel_radius}" length="${rear_wheel_width}"/>
+        </geometry>
+        <material name="rubber"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${rear_wheel_radius}" length="${rear_wheel_width}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Wheel rotation joint - THIS IS A DRIVEN JOINT -->
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="${prefix}_hub_motor"/>
+      <child link="${prefix}_wheel"/>
+      <origin xyz="0 ${y_offset * 0.03} 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+
+  </xacro:macro>
+
+  <!-- Main macro that creates both rear wheels -->
+  <xacro:macro name="rear_drive" params="parent">
+    
+    <!-- Left rear wheel (positive Y) -->
+    <xacro:rear_wheel prefix="rear_left" y_offset="${track_width/2 - 0.10}"/>
+    
+    <!-- Right rear wheel (negative Y) -->
+    <xacro:rear_wheel prefix="rear_right" y_offset="${-(track_width/2 - 0.10)}"/>
+
+    <!-- ============================================================== -->
+    <!-- REAR AXLE VISUAL - Connects the two sides                      -->
+    <!-- ============================================================== -->
+    
+    <link name="rear_axle_tube">
+      <inertial>
+        <mass value="0.5"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.5" r="0.015" l="0.30"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="0.015" length="0.30"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="0.015" length="0.30"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="rear_axle_tube_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="rear_axle_tube"/>
+      <origin xyz="0.08 0 0.20" rpy="0 0 0"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>

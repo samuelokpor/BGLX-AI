@@ -1,0 +1,293 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================================== -->
+  <!-- FRAME - Main tubular aluminum frame                                -->
+  <!-- Curved design matching BGLX concept art                            -->
+  <!-- ================================================================== -->
+
+  <!-- Frame dimensions -->
+  <xacro:property name="tube_radius" value="0.025"/>           <!-- 50mm diameter tube -->
+  <xacro:property name="wheelbase" value="1.20"/>              <!-- Front to rear axle -->
+  <xacro:property name="frame_height" value="0.35"/>           <!-- Main frame height from ground -->
+  <xacro:property name="frame_mass" value="8.0"/>              <!-- Total frame mass kg -->
+
+  <xacro:macro name="frame" params="parent">
+
+    <!-- ============================================================== -->
+    <!-- BASE LINK - Reference frame at center of rear axle, ground level -->
+    <!-- ============================================================== -->
+    <link name="base_link">
+      <inertial>
+        <mass value="0.1"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:dummy_inertia/>
+      </inertial>
+    </link>
+
+
+
+    <!-- Base footprint - ground projection (for navigation) -->
+    <link name="base_footprint">
+      <inertial>
+        <mass value="0.001"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:dummy_inertia/>
+      </inertial>
+    </link>
+    
+    <joint name="base_footprint_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="base_footprint"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- MAIN FRAME SPINE - Horizontal tube from rear to front          -->
+    <!-- ============================================================== -->
+    <link name="frame_main_spine">
+      <inertial>
+        <mass value="3.0"/>
+        <origin xyz="0.5 0 0" rpy="0 0 0"/>
+        <xacro:box_inertia m="3.0" x="1.0" y="0.1" z="0.1"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.5 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="1.0"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0.5 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="1.0"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_main_spine_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="frame_main_spine"/>
+      <origin xyz="0.1 0 ${frame_height}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- REAR FRAME SECTION - Supports rear axle                        -->
+    <!-- ============================================================== -->
+    
+    <!-- Left rear vertical tube -->
+    <link name="frame_rear_left_vertical">
+      <inertial>
+        <mass value="0.5"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.5" r="${tube_radius}" l="0.25"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0.125" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.25"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.125" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.25"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_rear_left_vertical_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="frame_rear_left_vertical"/>
+      <origin xyz="0 0.15 0.10" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Right rear vertical tube -->
+    <link name="frame_rear_right_vertical">
+      <inertial>
+        <mass value="0.5"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.5" r="${tube_radius}" l="0.25"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0.125" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.25"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.125" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.25"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_rear_right_vertical_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="frame_rear_right_vertical"/>
+      <origin xyz="0 -0.15 0.10" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Rear cross tube (connects left and right) -->
+    <link name="frame_rear_cross">
+      <inertial>
+        <mass value="0.4"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.4" r="${tube_radius}" l="0.30"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.30"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.30"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_rear_cross_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="frame_rear_cross"/>
+      <origin xyz="0 0 ${frame_height}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- CARGO SUPPORT FRAME - Platform for cargo box                   -->
+    <!-- ============================================================== -->
+    
+    <!-- Left cargo rail -->
+    <link name="frame_cargo_rail_left">
+      <inertial>
+        <mass value="0.6"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.6" r="${tube_radius}" l="0.6"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.3 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.6"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0.3 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.6"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_cargo_rail_left_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="frame_cargo_rail_left"/>
+      <origin xyz="0.2 0.20 ${frame_height}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Right cargo rail -->
+    <link name="frame_cargo_rail_right">
+      <inertial>
+        <mass value="0.6"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.6" r="${tube_radius}" l="0.6"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.3 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.6"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0.3 0 0" rpy="0 ${pi/2} 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.6"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_cargo_rail_right_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="frame_cargo_rail_right"/>
+      <origin xyz="0.2 -0.20 ${frame_height}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- FRONT FRAME SECTION - Head tube for steering                   -->
+    <!-- ============================================================== -->
+    
+    
+
+
+    <!-- Head tube (where front fork attaches) -->
+    <link name="frame_head_tube">
+      <inertial>
+        <mass value="0.8"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.8" r="0.03" l="0.15"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.03" length="0.15"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.03" length="0.15"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_head_tube_joint" type="fixed">
+      <parent link="frame_main_spine"/>
+      <child link="frame_head_tube"/>
+      <!-- Raised up so fork+wheel reaches ground -->
+      <origin xyz="1.0 0 0.20" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- DIAGONAL BRACES - Structural rigidity                          -->
+    <!-- ============================================================== -->
+    
+    <!-- Front diagonal (spine to head tube area) -->
+    <link name="frame_front_diagonal">
+      <inertial>
+        <mass value="0.4"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:cylinder_inertia m="0.4" r="${tube_radius}" l="0.25"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.25"/>
+        </geometry>
+        <material name="aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${tube_radius}" length="0.25"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="frame_front_diagonal_joint" type="fixed">
+      <parent link="frame_main_spine"/>
+      <child link="frame_front_diagonal"/>
+      <origin xyz="0.85 0 -0.05" rpy="0 ${-60*pi/180} 0"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>

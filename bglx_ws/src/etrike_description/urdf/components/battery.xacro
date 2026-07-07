@@ -1,0 +1,107 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================================== -->
+  <!-- BATTERY - Low-mounted battery enclosure with BGLX branding         -->
+  <!-- Positioned under the main frame for low center of gravity          -->
+  <!-- ================================================================== -->
+
+  <xacro:property name="battery_length" value="0.30"/>         <!-- X dimension -->
+  <xacro:property name="battery_width" value="0.20"/>          <!-- Y dimension -->
+  <xacro:property name="battery_height" value="0.12"/>         <!-- Z dimension -->
+  <xacro:property name="battery_mass" value="10.0"/>           <!-- ~1kWh lithium pack -->
+
+  <xacro:macro name="battery" params="parent">
+
+    <!-- ============================================================== -->
+    <!-- BATTERY ENCLOSURE - Main battery box                           -->
+    <!-- ============================================================== -->
+    
+    <link name="battery_enclosure">
+      <inertial>
+        <mass value="${battery_mass}"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:box_inertia m="${battery_mass}" x="${battery_length}" y="${battery_width}" z="${battery_height}"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${battery_length} ${battery_width} ${battery_height}"/>
+        </geometry>
+        <material name="dark_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${battery_length} ${battery_width} ${battery_height}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="battery_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="battery_enclosure"/>
+      <!-- Low mounted, slightly forward of rear axle -->
+      <origin xyz="0.35 0 0.12" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- BATTERY INDICATOR - Green LED status indicator                 -->
+    <!-- ============================================================== -->
+    
+    <link name="battery_indicator">
+      <inertial>
+        <mass value="0.01"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:dummy_inertia/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.005 0.04 0.015"/>
+        </geometry>
+        <material name="bglx_green"/>
+      </visual>
+    </link>
+
+    <joint name="battery_indicator_joint" type="fixed">
+      <parent link="battery_enclosure"/>
+      <child link="battery_indicator"/>
+      <!-- Visible on front face of battery -->
+      <origin xyz="${battery_length/2 + 0.003} 0 0.03" rpy="0 0 0"/>
+    </joint>
+
+    <!-- ============================================================== -->
+    <!-- BMS MODULE - Battery Management System box                     -->
+    <!-- ============================================================== -->
+    
+    <link name="bms_module">
+      <inertial>
+        <mass value="0.3"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <xacro:box_inertia m="0.3" x="0.08" y="0.06" z="0.03"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.08 0.06 0.03"/>
+        </geometry>
+        <material name="carbon_fiber"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.08 0.06 0.03"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="bms_module_joint" type="fixed">
+      <parent link="battery_enclosure"/>
+      <child link="bms_module"/>
+      <origin xyz="${-battery_length/2 + 0.05} 0 ${battery_height/2 + 0.02}" rpy="0 0 0"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>

@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================================== -->
+  <!-- MATERIALS - Color definitions for RViz visualization               -->
+  <!-- Matching BGLX design: aluminum frame, carbon panel, dark cargo     -->
+  <!-- ================================================================== -->
+
+  <!-- Aluminum - brushed silver for frame -->
+  <material name="aluminum">
+    <color rgba="0.75 0.75 0.78 1.0"/>
+  </material>
+
+  <!-- Carbon fiber - dark grey with slight blue tint -->
+  <material name="carbon_fiber">
+    <color rgba="0.15 0.15 0.18 1.0"/>
+  </material>
+
+  <!-- Dark grey - cargo box, battery enclosure -->
+  <material name="dark_grey">
+    <color rgba="0.25 0.25 0.27 1.0"/>
+  </material>
+
+  <!-- Black - wheels, tires -->
+  <material name="black">
+    <color rgba="0.1 0.1 0.1 1.0"/>
+  </material>
+
+  <!-- Rubber - tire material -->
+  <material name="rubber">
+    <color rgba="0.2 0.2 0.2 1.0"/>
+  </material>
+
+  <!-- Screen - slightly glowing blue-ish -->
+  <material name="screen">
+    <color rgba="0.1 0.15 0.2 1.0"/>
+  </material>
+
+  <!-- BGLX Green - accent color, indicators -->
+  <material name="bglx_green">
+    <color rgba="0.0 0.8 0.4 1.0"/>
+  </material>
+
+  <!-- Hub motor - metallic dark -->
+  <material name="hub_motor">
+    <color rgba="0.3 0.3 0.32 1.0"/>
+  </material>
+
+  <!-- LiDAR sensor - dark with accent -->
+  <material name="lidar">
+    <color rgba="0.2 0.2 0.22 1.0"/>
+  </material>
+
+  <!-- Fork - slightly darker aluminum -->
+  <material name="fork">
+    <color rgba="0.4 0.4 0.42 1.0"/>
+  </material>
+
+</robot>
