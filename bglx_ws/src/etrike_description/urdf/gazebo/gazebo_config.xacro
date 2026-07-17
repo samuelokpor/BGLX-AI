@@ -115,7 +115,7 @@
       <publish_wheel_tf>false</publish_wheel_tf>
       
       <odometry_frame>odom</odometry_frame>
-      <robot_base_frame>base_footprint</robot_base_frame>
+      <robot_base_frame>base_link</robot_base_frame>
       
       <update_rate>50</update_rate>
     </plugin>
@@ -350,4 +350,48 @@
     </plugin>
   </gazebo>
 
+
+  <!-- DEPTH CAMERA - forward/down 3D sensing for low & near obstacles -->
+  <link name="depth_camera">
+    <inertial>
+      <mass value="0.05"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+    </inertial>
+    <visual><origin xyz="0 0 0" rpy="0 0 0"/><geometry><box size="0.03 0.09 0.03"/></geometry><material name="carbon_fiber"/></visual>
+    <collision><origin xyz="0 0 0" rpy="0 0 0"/><geometry><box size="0.03 0.09 0.03"/></geometry></collision>
+  </link>
+  <joint name="depth_camera_joint" type="fixed">
+    <parent link="cargo_box"/>
+    <child link="depth_camera"/>
+    <origin xyz="0.30 0 0.12" rpy="0 0.40 0"/>
+  </joint>
+  <link name="depth_camera_optical">
+    <inertial><mass value="0.001"/><origin xyz="0 0 0" rpy="0 0 0"/><inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/></inertial>
+  </link>
+  <joint name="depth_camera_optical_joint" type="fixed">
+    <parent link="depth_camera"/>
+    <child link="depth_camera_optical"/>
+    <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+  </joint>
+  <gazebo reference="depth_camera">
+    <material>Gazebo/Black</material>
+    <sensor name="front_depth" type="depth">
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <visualize>false</visualize>
+      <camera name="front_depth">
+        <horizontal_fov>1.20</horizontal_fov>
+        <image><width>320</width><height>240</height><format>R8G8B8</format></image>
+        <clip><near>0.1</near><far>8.0</far></clip>
+      </camera>
+      <plugin name="front_depth_controller" filename="libgazebo_ros_camera.so">
+        <ros><namespace>/etrike</namespace></ros>
+        <camera_name>front_depth</camera_name>
+        <frame_name>depth_camera_optical</frame_name>
+        <min_depth>0.1</min_depth>
+        <max_depth>8.0</max_depth>
+      </plugin>
+    </sensor>
+  </gazebo>
 </robot>
