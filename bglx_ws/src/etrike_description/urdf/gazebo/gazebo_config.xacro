@@ -29,9 +29,9 @@
   <gazebo reference="camera_front_main"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="camera_front_left"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="camera_front_right"><material>Gazebo/Black</material></gazebo>
-  <gazebo reference="camera_side_left"><material>Gazebo/Black</material></gazebo>
-  <gazebo reference="camera_side_right"><material>Gazebo/Black</material></gazebo>
-  <gazebo reference="camera_rear_left"><material>Gazebo/Black</material></gazebo>
+
+
+<gazebo reference="camera_rear_left"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="camera_rear_right"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="camera_rear_main"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="camera_ground"><material>Gazebo/Black</material></gazebo>
@@ -203,69 +203,13 @@
   <!-- LEFT CAMERA - Side view for turning                            -->
   <!-- ============================================================== -->
   
-  <gazebo reference="camera_side_left">
-    <sensor name="camera_left" type="camera">
-      <always_on>true</always_on>
-      <visualize>true</visualize>
-      <update_rate>20</update_rate>
-      <camera name="left">
-        <horizontal_fov>1.5708</horizontal_fov>
-        <image>
-          <width>640</width>
-          <height>480</height>
-          <format>R8G8B8</format>
-        </image>
-        <clip>
-          <near>0.1</near>
-          <far>50</far>
-        </clip>
-      </camera>
-      <plugin name="camera_left_controller" filename="libgazebo_ros_camera.so">
-        <ros>
-          <namespace>/etrike</namespace>
-          <remapping>image_raw:=camera/left/image_raw</remapping>
-          <remapping>camera_info:=camera/left/camera_info</remapping>
-        </ros>
-        <camera_name>left</camera_name>
-        <frame_name>camera_side_left</frame_name>
-      </plugin>
-    </sensor>
-  </gazebo>
 
-  <!-- ============================================================== -->
+<!-- ============================================================== -->
   <!-- RIGHT CAMERA - Side view for turning                           -->
   <!-- ============================================================== -->
   
-  <gazebo reference="camera_side_right">
-    <sensor name="camera_right" type="camera">
-      <always_on>true</always_on>
-      <visualize>true</visualize>
-      <update_rate>20</update_rate>
-      <camera name="right">
-        <horizontal_fov>1.5708</horizontal_fov>
-        <image>
-          <width>640</width>
-          <height>480</height>
-          <format>R8G8B8</format>
-        </image>
-        <clip>
-          <near>0.1</near>
-          <far>50</far>
-        </clip>
-      </camera>
-      <plugin name="camera_right_controller" filename="libgazebo_ros_camera.so">
-        <ros>
-          <namespace>/etrike</namespace>
-          <remapping>image_raw:=camera/right/image_raw</remapping>
-          <remapping>camera_info:=camera/right/camera_info</remapping>
-        </ros>
-        <camera_name>right</camera_name>
-        <frame_name>camera_side_right</frame_name>
-      </plugin>
-    </sensor>
-  </gazebo>
 
-  <!-- ============================================================== -->
+<!-- ============================================================== -->
   <!-- GROUND CAMERA - Close obstacle detection                       -->
   <!-- ============================================================== -->
   
