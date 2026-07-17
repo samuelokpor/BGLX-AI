@@ -1,0 +1,17 @@
+frontier_explorer:
+  ros__parameters:
+    use_sim_time: true
+    map_topic: /map
+    global_frame: map
+    robot_base_frame: base_link
+    nav_action: navigate_to_pose
+    min_frontier_perimeter: 0.5      # m -> min frontier length to consider
+    occupancy_threshold: 65          # /map cell >= this is an obstacle
+    safe_distance: 3.0               # m, anti-revisit fade radius (your dimos value)
+    info_gain_threshold: 0.005        # min fractional map-info increase to keep going
+    num_no_gain_attempts: 2          # consecutive no-gain ticks -> stop
+    goal_timeout: 45.0               # s per Nav2 goal before moving on
+    unknown_traversal_penalty: 3.0   # Dijkstra cost multiplier for unknown cells
+    inflation_radius: 0.25           # m, obstacle inflation for planning
+    info_radius: 0.6
+    period: 1.0                      # s, planner tick
