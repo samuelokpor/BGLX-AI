@@ -142,6 +142,32 @@
       <dynamics damping="0.1" friction="0.05"/>
     </joint>
 
+    <link name="${prefix}_rim">
+      <inertial><mass value="0.2"/><origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-4"/></inertial>
+      <visual><origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="0.11" length="0.062"/></geometry>
+        <material name="aluminum"/></visual>
+    </link>
+    <joint name="${prefix}_rim_joint" type="fixed">
+      <parent link="${prefix}_wheel"/><child link="${prefix}_rim"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+    <gazebo reference="${prefix}_rim"><material>Gazebo/Grey</material></gazebo>
+
+    <link name="${prefix}_hubcap">
+      <inertial><mass value="0.05"/><origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/></inertial>
+      <visual><origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="0.045" length="0.072"/></geometry>
+        <material name="hub_motor"/></visual>
+    </link>
+    <joint name="${prefix}_hubcap_joint" type="fixed">
+      <parent link="${prefix}_wheel"/><child link="${prefix}_hubcap"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+    <gazebo reference="${prefix}_hubcap"><material>Gazebo/DarkGrey</material></gazebo>
+
   </xacro:macro>
 
   <!-- Main macro that creates both rear wheels -->

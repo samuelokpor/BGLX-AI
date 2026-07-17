@@ -139,6 +139,44 @@
       <origin xyz="0 0 0.02" rpy="0 0 0"/>
     </joint>
 
+    <!-- ==== BGLX accent stripes (visual only) ==== -->
+    <link name="accent_left">
+      <inertial><mass value="0.01"/><origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/></inertial>
+      <visual><origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><box size="0.50 0.014 0.05"/></geometry>
+        <material name="bglx_green"/></visual>
+    </link>
+    <joint name="accent_left_joint" type="fixed">
+      <parent link="cargo_box"/><child link="accent_left"/>
+      <origin xyz="0 0.229 -0.10" rpy="0 0 0"/>
+    </joint>
+    <gazebo reference="accent_left"><material>Gazebo/Green</material></gazebo>
+    <link name="accent_right">
+      <inertial><mass value="0.01"/><origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/></inertial>
+      <visual><origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><box size="0.50 0.014 0.05"/></geometry>
+        <material name="bglx_green"/></visual>
+    </link>
+    <joint name="accent_right_joint" type="fixed">
+      <parent link="cargo_box"/><child link="accent_right"/>
+      <origin xyz="0 -0.229 -0.10" rpy="0 0 0"/>
+    </joint>
+    <gazebo reference="accent_right"><material>Gazebo/Green</material></gazebo>
+    <link name="accent_front">
+      <inertial><mass value="0.01"/><origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6"/></inertial>
+      <visual><origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><box size="0.014 0.40 0.05"/></geometry>
+        <material name="bglx_green"/></visual>
+    </link>
+    <joint name="accent_front_joint" type="fixed">
+      <parent link="cargo_box"/><child link="accent_front"/>
+      <origin xyz="0.281 0 -0.10" rpy="0 0 0"/>
+    </joint>
+    <gazebo reference="accent_front"><material>Gazebo/Green</material></gazebo>
+
   </xacro:macro>
 
 </robot>
