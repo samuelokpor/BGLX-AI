@@ -132,6 +132,7 @@
       </collision>
     </link>
 
+
     <!-- Wheel rotation joint - THIS IS A DRIVEN JOINT -->
     <joint name="${prefix}_wheel_joint" type="continuous">
       <parent link="${prefix}_hub_motor"/>

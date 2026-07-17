@@ -253,7 +253,7 @@
       <parent link="frame_main_spine"/>
       <child link="frame_head_tube"/>
       <!-- Raised up so fork+wheel reaches ground -->
-      <origin xyz="1.0 0 0.20" rpy="0 0 0"/>
+      <origin xyz="1.0 0 0.102" rpy="0 0 0"/>
     </joint>
 
     <!-- ============================================================== -->
