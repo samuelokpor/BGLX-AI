@@ -1,0 +1,18 @@
+waypoint_follower:
+  ros__parameters:
+    cmd_vel_topic: /etrike/cmd_vel
+    odom_topic: /etrike/odom
+    scan_topic: /etrike/scan
+    # Flat [x0,y0, x1,y1, ...] in the odom frame.
+    # Default: creep 2 m straight, then turn and go 2 m to the left.
+    waypoints: [2.0, 0.0, 2.0, 2.0]
+    goal_tolerance: 0.25
+    max_linear: 0.35          # walking-pace creep for first tests
+    max_angular: 0.6
+    k_linear: 0.6
+    k_angular: 1.5
+    heading_tolerance: 0.25
+    obstacle_stop_distance: 0.8
+    obstacle_cone_deg: 60.0
+    control_rate: 20.0
+    loop: false
