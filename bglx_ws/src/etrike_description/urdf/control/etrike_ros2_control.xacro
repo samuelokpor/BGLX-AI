@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ================================================================== -->
+  <!-- ros2_control + gazebo_ros2_control  (Track A tricycle migration)   -->
+  <!--                                                                    -->
+  <!-- NEW FILE.                                                          -->
+  <!-- DEST: bglx_ws/src/etrike_description/urdf/control/etrike_ros2_control.xacro -->
+  <!--                                                                    -->
+  <!-- Exposes three joints to ros2_control:                              -->
+  <!--   steering_joint       -> POSITION command (front steer)           -->
+  <!--   rear_left_wheel_joint  -> VELOCITY command (traction)            -->
+  <!--   rear_right_wheel_joint -> VELOCITY command (traction)            -->
+  <!-- matching tricycle_steering_controller with front_steering=true.    -->
+  <!-- ================================================================== -->
+
+  <!-- Path to the controller config; default resolves via package.
+       Overridable from a launch file with:  controllers_file:=/abs/path.yaml -->
+  <xacro:arg name="controllers_file"
+             default="$(find etrike_description)/config/controllers.yaml"/>
+
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+
+    <!-- FRONT STEER (position-commanded) -->
+    <joint name="steering_joint">
+      <command_interface name="position">
+        <param name="min">-0.6</param>
+        <param name="max">0.6</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <!-- REAR TRACTION LEFT (velocity-commanded) -->
+    <joint name="rear_left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-25.0</param>
+        <param name="max">25.0</param>
+      </command_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="position"/>
+    </joint>
+
+    <!-- REAR TRACTION RIGHT (velocity-commanded) -->
+    <joint name="rear_right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-25.0</param>
+        <param name="max">25.0</param>
+      </command_interface>
+      <state_interface name="velocity"/>
+      <state_interface name="position"/>
+    </joint>
+  </ros2_control>
+
+  <!-- gazebo_ros2_control plugin loads the controller_manager INSIDE Gazebo.
+       Namespace /etrike keeps topics consistent with the rest of the stack:
+       controller_manager -> /etrike/controller_manager
+       joint states       -> /etrike/joint_states -->
+  <gazebo>
+    <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+      <parameters>$(arg controllers_file)</parameters>
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
+    </plugin>
+  </gazebo>
+
+</robot>

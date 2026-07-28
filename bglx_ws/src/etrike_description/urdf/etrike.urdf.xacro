@@ -2,77 +2,39 @@
 <robot name="bglx_etrike" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- ================================================================== -->
-  <!-- BGLX AUTONOMOUS E-TRIKE                                            -->
-  <!-- Main URDF entry point - includes all components                    -->
+  <!-- BGLX AUTONOMOUS E-TRIKE - Main URDF entry point                    -->
+  <!-- DEST: bglx_ws/src/etrike_description/urdf/etrike.urdf.xacro        -->
+  <!-- Track A change: include the ros2_control / gazebo_ros2_control xacro-->
   <!-- ================================================================== -->
 
-  <!-- Note: pi is provided by xacro automatically, no need to define it -->
-
-  <!-- ============================================================== -->
-  <!-- INCLUDE MACROS                                                 -->
-  <!-- ============================================================== -->
-  
-  <!-- Inertia calculation helpers -->
+  <!-- Inertia + material helpers -->
   <xacro:include filename="$(find etrike_description)/urdf/macros/inertia_macros.xacro"/>
-  
-  <!-- Material/color definitions -->
   <xacro:include filename="$(find etrike_description)/urdf/macros/materials.xacro"/>
 
-  <!-- ============================================================== -->
-  <!-- INCLUDE COMPONENTS                                             -->
-  <!-- ============================================================== -->
-  
-  <!-- Main tubular frame -->
+  <!-- Components -->
   <xacro:include filename="$(find etrike_description)/urdf/components/frame.xacro"/>
-  
-  <!-- Front fork with steering and wheel -->
   <xacro:include filename="$(find etrike_description)/urdf/components/front_fork.xacro"/>
-  
-  <!-- Control panel with A-frame and screen -->
   <xacro:include filename="$(find etrike_description)/urdf/components/control_panel.xacro"/>
-  
-  <!-- Battery enclosure -->
   <xacro:include filename="$(find etrike_description)/urdf/components/battery.xacro"/>
-  
-  <!-- Cargo box -->
   <xacro:include filename="$(find etrike_description)/urdf/components/cargo_box.xacro"/>
-  
-  <!-- Rear drive system with hub motors -->
   <xacro:include filename="$(find etrike_description)/urdf/components/rear_drive.xacro"/>
-  
-  <!-- Sensors (LiDAR, cameras) -->
   <xacro:include filename="$(find etrike_description)/urdf/components/sensors.xacro"/>
 
-  <!-- ============================================================== -->
-  <!-- INCLUDE GAZEBO CONFIG (only loaded in simulation)              -->
-  <!-- ============================================================== -->
+  <!-- Gazebo sensor/material config (diff_drive plugin REMOVED here) -->
   <xacro:include filename="$(find etrike_description)/urdf/gazebo/gazebo_config.xacro"/>
 
+  <!-- NEW: ros2_control hardware + gazebo_ros2_control plugin -->
+  <xacro:include filename="$(find etrike_description)/urdf/control/etrike_ros2_control.xacro"/>
+
   <!-- ============================================================== -->
-  <!-- INSTANTIATE COMPONENTS                                         -->
+  <!-- INSTANTIATE COMPONENTS (parent links must exist before children)-->
   <!-- ============================================================== -->
-  
-  <!-- Build order matters! Parent links must exist before children -->
-  
-  <!-- 1. Frame (creates base_link and frame structure) -->
   <xacro:frame parent="base_link"/>
-  
-  <!-- 2. Front fork (attaches to frame_head_tube) -->
   <xacro:front_fork parent="frame_head_tube"/>
-  
-  <!-- 3. Control panel (attaches to frame_main_spine) -->
   <xacro:control_panel parent="frame_main_spine"/>
-  
-  <!-- 4. Battery (attaches to base_link) -->
   <xacro:battery parent="base_link"/>
-  
-  <!-- 5. Cargo box (attaches to base_link) -->
   <xacro:cargo_box parent="base_link"/>
-  
-  <!-- 6. Rear drive (attaches to base_link) -->
   <xacro:rear_drive parent="base_link"/>
-  
-  <!-- 7. Sensors (attaches to sensor_mount_plate and other links) -->
   <xacro:sensors parent="sensor_mount_plate"/>
 
 </robot>

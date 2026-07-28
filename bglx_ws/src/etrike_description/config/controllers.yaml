@@ -1,0 +1,51 @@
+# ros2_control controllers for the BGLX e-trike (Track A tricycle migration)
+# NEW FILE.
+# DEST: bglx_ws/src/etrike_description/config/controllers.yaml
+#
+# Loaded by the gazebo_ros2_control plugin (namespace /etrike), so the
+# controller_manager is /etrike/controller_manager and the keys below are
+# fully-qualified with the /etrike namespace.
+#
+# Param names verified against control.ros.org (Humble):
+#   steering_controllers_library + tricycle_steering_controller.
+
+controller_manager:
+  ros__parameters:
+    update_rate: 50
+    use_sim_time: true
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    tricycle_steering_controller:
+      type: tricycle_steering_controller/TricycleSteeringController
+
+tricycle_steering_controller:
+  ros__parameters:
+    use_sim_time: true
+
+    # --- kinematics (from URDF geometry) ---
+    wheelbase: 1.33          # front wheel (x=1.14) to rear axle (x=-0.19)
+    wheel_track: 0.55        # rear wheel center-to-center
+    front_wheels_radius: 0.175
+    rear_wheels_radius: 0.175
+
+    # --- joint wiring (front_steering=true => front=position, rear=velocity) ---
+    front_steering: true
+    front_wheels_names: ["steering_joint"]
+    rear_wheels_names: ["rear_left_wheel_joint", "rear_right_wheel_joint"]
+
+    # --- odometry ---
+    open_loop: false
+    position_feedback: false        # traction feedback is velocity
+    velocity_rolling_window_size: 10
+    base_frame_id: base_link
+    odom_frame_id: odom
+    enable_odom_tf: true            # publishes odom -> base_link (replaces diff_drive)
+    twist_covariance_diagonal: [0.001, 0.0, 0.0, 0.0, 0.0, 0.01]
+    pose_covariance_diagonal:  [0.001, 0.001, 0.0, 0.0, 0.0, 0.01]
+
+    # --- input ---
+    use_stamped_vel: false          # subscribe ~/reference_unstamped (geometry_msgs/Twist)
+    reference_timeout: 0.5          # stop if no command within 0.5 s
+    reduce_wheel_speed_until_steering_reached: true

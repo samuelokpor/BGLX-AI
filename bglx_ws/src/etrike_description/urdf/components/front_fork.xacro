@@ -2,19 +2,29 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- ================================================================== -->
-  <!-- FRONT FORK - Caster wheel that follows the differential drive      -->
+  <!-- FRONT FORK - ACTIVELY STEERED wheel (Track A tricycle migration)   -->
+  <!--                                                                    -->
+  <!-- Was: a free 'caster' (continuous swivel) that followed diff-drive. -->
+  <!-- Now: an actively commanded steering axis (revolute steering_joint) -->
+  <!-- driven by ros2_control's tricycle_steering_controller.             -->
+  <!--                                                                    -->
+  <!-- DEST: bglx_ws/src/etrike_description/urdf/components/front_fork.xacro -->
   <!-- ================================================================== -->
 
   <xacro:property name="front_wheel_radius" value="0.175"/>
   <xacro:property name="front_wheel_width" value="0.05"/>
   <xacro:property name="front_wheel_mass" value="2.0"/>
 
+  <!-- Steering limit (rad). ~0.6 rad = ~34 deg. With wheelbase 1.33 m this
+       gives minimum turning radius R = L / tan(delta) ~ 1.95 m.
+       Keep in sync with nav2_params planner minimum_turning_radius (>= R)
+       and cmd_vel_limiter.py max_steering_angle. -->
+  <xacro:property name="max_steer" value="0.6"/>
+
   <xacro:macro name="front_fork" params="parent">
 
-    <!-- ============================================================== -->
-    <!-- CASTER MOUNT - Allows 360° rotation                            -->
-    <!-- ============================================================== -->
-    
+    <!-- STEERING YOKE (link name kept as caster_mount so gazebo material
+         references in gazebo_config.xacro still resolve). -->
     <link name="caster_mount">
       <inertial>
         <mass value="0.5"/>
@@ -23,32 +33,27 @@
       </inertial>
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-          <box size="0.06 0.06 0.04"/>
-        </geometry>
+        <geometry><box size="0.06 0.06 0.04"/></geometry>
         <material name="aluminum"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-          <box size="0.06 0.06 0.04"/>
-        </geometry>
+        <geometry><box size="0.06 0.06 0.04"/></geometry>
       </collision>
     </link>
 
-    <!-- Caster swivel joint - free rotation around Z -->
-    <joint name="caster_swivel_joint" type="continuous">
+    <!-- STEERING JOINT: renamed from caster_swivel_joint, changed
+         continuous(free) -> revolute(limited, actively driven). -->
+    <joint name="steering_joint" type="revolute">
       <parent link="frame_head_tube"/>
       <child link="caster_mount"/>
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
       <axis xyz="0 0 1"/>
-      <dynamics damping="0.01" friction="0.001"/>
+      <limit effort="50.0" velocity="2.0" lower="${-max_steer}" upper="${max_steer}"/>
+      <dynamics damping="0.1" friction="0.05"/>
     </joint>
 
-    <!-- ============================================================== -->
-    <!-- FORK ASSEMBLY                                                  -->
-    <!-- ============================================================== -->
-    
+    <!-- FORK ASSEMBLY -->
     <link name="steering_link">
       <inertial>
         <mass value="1.0"/>
@@ -86,17 +91,13 @@
       </collision>
     </link>
 
-    <!-- Fork fixed to caster mount (offset creates trailing caster effect) -->
     <joint name="fork_joint" type="fixed">
       <parent link="caster_mount"/>
       <child link="steering_link"/>
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </joint>
 
-    <!-- ============================================================== -->
-    <!-- FRONT WHEEL                                                    -->
-    <!-- ============================================================== -->
-    
+    <!-- FRONT WHEEL - passive rolling (front is steer-only, not driven) -->
     <link name="front_wheel">
       <inertial>
         <mass value="${front_wheel_mass}"/>
@@ -105,20 +106,15 @@
       </inertial>
       <visual>
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
-        <geometry>
-          <cylinder radius="${front_wheel_radius}" length="${front_wheel_width}"/>
-        </geometry>
+        <geometry><cylinder radius="${front_wheel_radius}" length="${front_wheel_width}"/></geometry>
         <material name="rubber"/>
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
-        <geometry>
-          <cylinder radius="${front_wheel_radius}" length="${front_wheel_width}"/>
-        </geometry>
+        <geometry><cylinder radius="${front_wheel_radius}" length="${front_wheel_width}"/></geometry>
       </collision>
     </link>
 
-    <!-- Front wheel rotation -->
     <joint name="front_wheel_joint" type="continuous">
       <parent link="steering_link"/>
       <child link="front_wheel"/>
