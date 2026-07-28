@@ -1,11 +1,52 @@
 # BGLX — Autonomous Last-Mile Delivery E-Trike
 
-An autonomy stack for a steered electric delivery tricycle, developed in
-simulation and on hardware in parallel. The target is campus and
-institutional logistics: contained, low-speed, geofenced environments where
-last-mile autonomy is tractable today rather than aspirational.
+**A delivery tricycle you operate in plain language.** Tell it what to do; it
+plans, drives, and — when it fails — explains why in terms a person or an
+agent can act on.
+
+An autonomy stack for a steered electric cargo trike, developed in simulation
+and on hardware in parallel. The target is campus and institutional
+logistics: contained, low-speed, geofenced environments where last-mile
+autonomy is tractable today rather than aspirational.
 
 ![BGLX autonomous e-trike in the campus world](docs/trike.png)
+
+```
+task> patrol between the loading dock and the north entrance until I stop you
+
+[agent] Checking where I am before planning a route.
+[tool ] get_pose()
+[obs ]  Position (2.86, 0.01) in map, heading 0.3 deg. Inside the mapped area.
+[tool ] navigate_to_landmark({'name': 'loading_dock'})
+[obs ]  Arrived at (7.40, 1.22), 0.19m from the goal, in 11.3s.
+```
+
+## What's different
+
+Two things, and the second matters more.
+
+**Natural-language operation.** Most delivery robots are commanded in
+coordinates or fixed waypoint lists, which means every new task is a
+configuration job for an engineer. BGLX takes the task in language and works
+out the goals itself. Operators describe outcomes, not coordinates.
+
+**Machine-legible failure.** This is the harder problem and the real moat.
+Nav2 reports `ABORTED` — a status code no agent can act on. A robot that
+fails opaquely needs a human to interpret it, which destroys the economics of
+an autonomous fleet. BGLX translates robot state into diagnosis:
+
+> *"Aborted 2.3 m from the goal. A path existed but the robot did not move
+> for 6.4 s — the local planner found no feasible trajectory. Given the
+> 1.94 m turning circle this usually means the approach angle is too tight.
+> Back off and re-approach from further out."*
+
+That paragraph is the difference between a robot that gets stuck and a robot
+that gets itself unstuck. It accumulates: every field failure understood
+becomes a diagnosis the fleet never needs a human for again.
+
+**Inference runs locally.** A campus vehicle cannot depend on reaching a
+cloud endpoint. The agent runs on a local model on the vehicle's own compute,
+with cloud backends available but not required.
 
 ## Why a tricycle
 
@@ -51,16 +92,11 @@ per unit of *real* travel — `info_gain / (1 + A*_path_cost)` — so it sweeps
 continuously instead of ping-ponging across the map. It only selects goals;
 Nav2 does the planning and driving.
 
-**Natural-language control.** An LLM agent operates the stack from a typed
-task. The interesting part is not the tool calls but the observation layer:
-Nav2 reports `ABORTED`, which no agent can act on. `bglx_agentic` translates
-robot state into text a model can reason about.
+**The agentic layer.** `bglx_agentic` exposes eight tools over Nav2, TF and
+the LiDAR, and turns robot state into text a model can reason about.
 
 - 720 LiDAR rays collapse to eight named sectors, with a 3-ray erosion so a
   single spurious return cannot report a whole sector as blocked.
-- `ABORTED` becomes *"a path existed but the robot did not move for 6.4 s;
-  the local planner found no feasible trajectory. Given the wide turning
-  circle this usually means the approach angle is too tight."*
 - Turn-in-place commands are rejected with an explanation, because a language
   model's prior is overwhelmingly differential-drive and the failure would
   otherwise be silent.
@@ -68,8 +104,7 @@ robot state into text a model can reason about.
   try and says why, rather than letting the planner fail opaquely.
 
 Backends: local (`ollama`), any OpenAI-compatible endpoint, or Anthropic.
-Only one file knows which — a delivery vehicle cannot depend on a cloud
-endpoint, so local inference is a first-class path rather than a fallback.
+Only one file knows which.
 
 ## Packages
 
