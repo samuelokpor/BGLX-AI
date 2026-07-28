@@ -5,6 +5,10 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+# DEST: bglx_ws/src/bglx_navigation/launch/navigation.launch.py
+# Track A change: launch the cmd_vel_limiter (Nav2 -> steering controller
+# bridge + speed-dependent steering limit).
+
 
 def generate_launch_description():
     pkg = get_package_share_directory('bglx_navigation')
@@ -55,5 +59,20 @@ def generate_launch_description():
             parameters=[{'use_sim_time': use_sim_time},
                         {'autostart': True},
                         {'node_names': lifecycle_nodes}],
+        ),
+
+        # Speed-dependent steering limit + bridge to the tricycle controller.
+        Node(
+            package='bglx_navigation', executable='cmd_vel_limiter',
+            name='cmd_vel_limiter', output='screen',
+            parameters=[{
+                'use_sim_time': use_sim_time,
+                'wheelbase': 1.33,
+                'max_steering_angle': 0.6,
+                'max_lateral_accel': 1.5,
+                'max_linear_vel': 2.78,
+                'input_topic': '/etrike/cmd_vel',
+                'output_topic': '/tricycle_steering_controller/reference_unstamped',
+            }],
         ),
     ])
