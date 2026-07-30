@@ -7,41 +7,47 @@ plan turns-in-place, and on this vehicle those silently do nothing.
 
 from .observations import MIN_TURN_RADIUS, MAX_LINEAR_VEL
 
+# NOTE: keep numeric constants OUT of this prompt. A 7B model was observed
+# lifting "2.78" and "1.94" straight out of the text and passing them as
+# tool arguments. Limits are enforced in robot_tools.py, not stated here.
+# NOTE: keep numeric constants OUT of this prompt. A 7B model was observed
+# lifting "2.78" and "1.94" verbatim from this text and passing them as tool
+# arguments (metres of displacement). Limits are enforced in robot_tools.py.
 SYSTEM_PROMPT = """You control a real electric delivery tricycle (BGLX AI) \
 running ROS2 Humble with a Nav2 stack, currently in Gazebo simulation.
 
-PLATFORM CONSTRAINTS - these are physical facts, not preferences:
+PLATFORM CONSTRAINTS - physical facts, not preferences:
 - The robot is a TRICYCLE with Ackermann front steering. It CANNOT rotate in \
-place. Minimum turning radius is %.2f metres.
-- Yaw rate is proportional to forward speed. At zero speed, no amount of \
-commanded rotation changes the heading.
-- Maximum speed is %.2f m/s.
-- Because of the turning circle, tight approaches fail. If a goal is hard to \
+place. It must be moving forward or backward to change heading.
+- Its turning circle is wide, so tight approaches fail. If a goal is hard to \
 reach, back off and approach from further out along a straighter line.
-- To face a different direction the robot must drive an arc. A goal behind it \
-requires a wide loop, which is normal and not an error.
+- To face a different direction it must drive an arc. A goal behind it needs \
+a wide loop, which is normal and not an error.
 
 LOCALISATION:
 - Position comes from live SLAM, so coordinates are only meaningful within \
 this session. Prefer landmarks over raw coordinates where they exist.
-- The map only covers ground the robot has already seen. If the robot leaves \
-the mapped area, NO goal can be planned until it returns. get_pose will say \
-so explicitly - believe it and act on it before trying anything else.
+- The map only covers ground the robot has already seen. Outside it, NO goal \
+can be planned. get_pose says so explicitly - act on that before anything \
+else.
 
 HOW TO WORK:
-- Prefer navigate_to or navigate_to_landmark. They use the full Nav2 stack \
-with obstacle avoidance. Use drive only as an escape hatch after Nav2 has \
-failed, or for small repositioning.
-- After any failure, read the DIAGNOSIS lines in the result before acting. \
-Never retry an identical command that has just failed.
-- Call get_pose and get_scan_summary when you need world state. Do not assume \
-it or carry it over from earlier in the task.
-- Sector distances come from a LIDAR that is blind within 0.45m. Something \
-very close may not appear at all.
+- ALWAYS call get_pose before your first movement in a task. Do not assume \
+where the robot is or which way it faces.
+- For relative instructions ("go forward 3 metres", "back up 2 metres") use \
+navigate_relative. Never compute coordinates yourself.
+- For absolute coordinates or landmarks use navigate_to or \
+navigate_to_landmark.
+- Use drive only after Nav2 has failed and a diagnosis says the robot must \
+reposition to escape.
+- Distances come from the USER'S REQUEST. Never take a number from these \
+instructions and pass it as a tool argument.
+- After any failure, read the DIAGNOSIS lines before acting. Never retry an \
+identical call that just failed.
+- Verify with get_pose or get_scan_summary before reporting a task complete.
 
 Be concise. One short line per step explaining what you are doing and why. \
-When the task is complete, say so plainly and stop calling tools.""" % (
-    MIN_TURN_RADIUS, MAX_LINEAR_VEL)
+When the task is done, say so plainly and stop calling tools."""
 
 
 TOOLS = [
@@ -50,6 +56,14 @@ TOOLS = [
         "description": ("Current position, heading and speed, plus a warning "
                         "if the robot is outside or near the edge of the "
                         "mapped area."),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "check_attitude",
+        "description": ("Report whether the vehicle is upright, leaning, or "
+                        "has tipped over. Call this if the robot stops "
+                        "responding to movement commands or moves far less "
+                        "than expected."),
         "input_schema": {"type": "object", "properties": {}},
     },
     {
@@ -65,7 +79,7 @@ TOOLS = [
     },
     {
         "name": "navigate_to",
-        "description": ("THE PRIMARY WAY TO MOVE. Drive to an absolute (x, y) in the map frame using the full Nav2 stack with obstacle avoidance and path planning. Use this for every movement task. For a RELATIVE move such as \"go 4 metres ahead\", first call get_pose, then compute the absolute target from the current position and heading. Blocks until arrival or failure, then reports what happened in detail."),
+        "description": ("Drive to an ABSOLUTE (x, y) in the map frame using the full Nav2 stack with obstacle avoidance and path planning. Use this for every movement task. Only use this when you have been given absolute map coordinates, or a landmark's stored coordinates. For any relative instruction use navigate_relative instead. Blocks until arrival or failure, then reports what happened in detail."),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -75,6 +89,57 @@ TOOLS = [
                         "description": "desired final heading in radians"},
             },
             "required": ["x", "y"],
+        },
+    },
+    {
+        "name": "navigate_relative",
+        "description": ("USE THIS FOR ANY RELATIVE INSTRUCTION: 'go 4 metres "
+                        "ahead', 'back up 2 metres', 'move 1 metre left'. "
+                        "Distances are relative to where the robot is NOW and "
+                        "which way it is facing. Positive forward drives "
+                        "ahead, negative reverses. Do NOT compute coordinates "
+                        "yourself and do NOT use navigate_to for relative "
+                        "instructions - the trigonometry is done for you."),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "forward": {"type": "number",
+                            "description": "DISTANCE IN METRES ahead; negative reverses. Not an angle."},
+                "left": {"type": "number",
+                         "description": "DISTANCE IN METRES sideways; negative right. NOT an angle - to turn, use turn_by."},
+            },
+            "required": ["forward"],
+        },
+    },
+    {
+        "name": "turn_by",
+        "description": ("Change the robot's HEADING by a number of DEGREES. "
+                        "Use this for any turn: 'turn left', 'turn around', "
+                        "'face the other way', or the corners of a shape. "
+                        "SIGN CONVENTION: turning LEFT is a POSITIVE number, turning RIGHT is a NEGATIVE number. 'turn left 90 degrees' means degrees=90. 'turn right 45 degrees' means degrees=-45. "
+                        "The robot drives an arc because it cannot pivot, so "
+                        "it also moves a few metres while turning. Never pass "
+                        "an angle to navigate_relative - that tool takes "
+                        "METRES, not radians or degrees."),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "degrees": {"type": "number",
+                            "description": "degrees to turn; +left, -right"},
+            },
+            "required": ["degrees"],
+        },
+    },
+    {
+        "name": "mark_here",
+        "description": ("Record the robot's current position under a name. "
+                        "Call this BEFORE moving whenever the task says to "
+                        "come back, return, or go back to where you started. "
+                        "Then use navigate_to_landmark to return exactly."),
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
         },
     },
     {

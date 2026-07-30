@@ -54,6 +54,19 @@ FOOTPRINT_FORWARD_REACH = 1.25
 NAV_TIMEOUT = 180.0
 
 
+def rpy_from_quat(q):
+    """Full roll/pitch/yaw. Yaw alone cannot tell you the robot has fallen."""
+    sinr = 2.0 * (q.w * q.x + q.y * q.z)
+    cosr = 1.0 - 2.0 * (q.x * q.x + q.y * q.y)
+    roll = math.atan2(sinr, cosr)
+    sinp = 2.0 * (q.w * q.y - q.z * q.x)
+    sinp = max(-1.0, min(1.0, sinp))
+    pitch = math.asin(sinp)
+    siny = 2.0 * (q.w * q.z + q.x * q.y)
+    cosy = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+    return roll, pitch, math.atan2(siny, cosy)
+
+
 def yaw_from_quat(q):
     return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
                       1.0 - 2.0 * (q.y * q.y + q.z * q.z))
@@ -218,6 +231,35 @@ class RobotTools(Node):
         return "Known landmarks:\n" + "\n".join(rows)
 
     # --- sensing tools -----------------------------------------------------
+    def check_attitude(self):
+        """Is the vehicle upright?
+
+        A tipped robot still publishes a pose, still accepts goals, and still
+        reports plausible-looking failures. Without this the agent will keep
+        commanding a vehicle lying on its side.
+        """
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                GLOBAL_FRAME, 'base_link', rclpy.time.Time(),
+                timeout=Duration(seconds=0.3))
+        except TransformException:
+            return None, "Attitude unknown (no transform to base_link)."
+        roll, pitch, _ = rpy_from_quat(tf.transform.rotation)
+        r, p = math.degrees(roll), math.degrees(pitch)
+
+        if abs(r) > 45.0 or abs(p) > 45.0:
+            return False, ("VEHICLE HAS TIPPED OVER: roll %.0f deg, pitch "
+                           "%.0f deg. It is lying on its side and cannot "
+                           "drive. NOTHING will work until it is righted. "
+                           "Stop issuing movement commands and report this "
+                           "to the operator." % (r, p))
+        if abs(r) > 15.0 or abs(p) > 15.0:
+            return True, ("UNSTABLE ATTITUDE: roll %.0f deg, pitch %.0f deg. "
+                          "The vehicle is leaning heavily and close to "
+                          "tipping. Slow down and avoid further turning until "
+                          "it settles." % (r, p))
+        return True, "Upright (roll %.0f deg, pitch %.0f deg)." % (r, p)
+
     def get_pose(self):
         pose = self._pose()
         if pose is None:
@@ -227,6 +269,9 @@ class RobotTools(Node):
         msg = ("Position (%.2f, %.2f) in frame '%s', heading %.1f deg, "
                "speed %.2f m/s." % (x, y, frame, math.degrees(yaw),
                                     self._speed()))
+        upright, att = self.check_attitude()
+        if upright is not True:
+            msg += " " + att
         ok, note = self.check_map_bounds()
         if ok is not True:
             msg += " " + note
@@ -243,10 +288,29 @@ class RobotTools(Node):
     # --- navigation --------------------------------------------------------
     def navigate_to(self, x, y, yaw=None):
         """Send a Nav2 goal, then report in words what happened."""
+        upright, att = self.check_attitude()
+        if upright is False:
+            self._last_failure = att
+            return "navigate_to refused. " + att
+
         inside, bounds_note = self.check_map_bounds()
         if inside is False:
             self._last_failure = bounds_note
             return "navigate_to refused. " + bounds_note
+
+        with self._lock:
+            bounds = self._bounds
+        if bounds:
+            bx0, by0, bx1, by1 = bounds
+            if not (bx0 <= float(x) <= bx1 and by0 <= float(y) <= by1):
+                msg = ("navigate_to refused: goal (%.2f, %.2f) lies OUTSIDE "
+                       "the mapped area, which spans (%.2f, %.2f) to "
+                       "(%.2f, %.2f). No path can be planned to a goal the "
+                       "costmap does not cover. Pick a goal inside the map, "
+                       "or explore toward it in stages."
+                       % (float(x), float(y), bx0, by0, bx1, by1))
+                self._last_failure = msg
+                return msg
 
         if not self.nav_client.wait_for_server(timeout_sec=5.0):
             return ("navigate_to failed: the navigate_to_pose action server is "
@@ -336,6 +400,137 @@ class RobotTools(Node):
         self._last_failure = msg
         return msg
 
+    def navigate_relative(self, forward=0.0, left=0.0):
+        """Move relative to the robot's CURRENT pose and heading.
+
+        Exists because relative instructions ("go 4m ahead", "back up 2m")
+        require trigonometry against the live heading, and a small model gets
+        that wrong in a way that looks like success: it invents an absolute
+        coordinate, reaches it, and reports the task done.
+        """
+        pose = self._pose()
+        if pose is None:
+            return "navigate_relative failed: robot pose unavailable."
+        x, y, yaw, frame = pose
+        if frame != GLOBAL_FRAME:
+            return ("navigate_relative refused: pose is in '%s', not 'map'. "
+                    "SLAM has not converged." % frame)
+
+        forward = float(forward)
+        left = float(left)
+        gx = x + forward * math.cos(yaw) - left * math.sin(yaw)
+        gy = y + forward * math.sin(yaw) + left * math.cos(yaw)
+
+        note = ("Relative move: %.2fm forward, %.2fm left from (%.2f, %.2f) "
+                "at %.1f deg -> absolute goal (%.2f, %.2f). "
+                % (forward, left, x, y, math.degrees(yaw), gx, gy))
+        return note + self.navigate_to(gx, gy, yaw)
+
+    def turn_by(self, degrees):
+        """Change heading by driving arcs, measuring after each one.
+
+        Closed-loop on purpose. Nav2's yaw_goal_tolerance is 0.60 rad (34
+        deg) because a car-like body cannot fine-tune heading at a goal, so a
+        single commanded turn can legally finish 34 deg off and still report
+        SUCCEEDED. Measuring the achieved heading and re-issuing the shortfall
+        is the only way to get an accurate turn without tightening a
+        tolerance that exists for good reason.
+        """
+        target = float(degrees)
+        start = self._pose()
+        if start is None:
+            return "turn_by failed: robot pose unavailable."
+        if start[3] != GLOBAL_FRAME:
+            return "turn_by refused: pose is in '%s', not 'map'." % start[3]
+        yaw0 = start[2]
+
+        if abs(target) < 5.0:
+            return "Turn too small to execute; nothing done."
+
+        MAX_ARC = 45.0        # per-arc cap; larger asks defeat the planner
+        TOL = 8.0             # degrees; good enough to stop iterating
+        log = []
+        achieved_total = 0.0
+
+        for attempt in range(5):
+            remaining = target - achieved_total
+            if abs(remaining) < TOL:
+                break
+
+            step = math.copysign(min(MAX_ARC, abs(remaining)), remaining)
+            theta = math.radians(step)
+            pose = self._pose()
+            if pose is None:
+                log.append("lost pose mid-turn")
+                break
+            x, y, yaw, _ = pose
+
+            with self._lock:
+                bounds = self._bounds
+
+            sign = 1.0 if theta > 0 else -1.0
+            goal = None
+            # Scale off the vehicle's actual capability. A hardcoded floor
+            # here silently ignores steering changes and turns wide.
+            for R in (MIN_TURN_RADIUS * 1.6,
+                      MIN_TURN_RADIUS * 1.3,
+                      MIN_TURN_RADIUS * 1.1):
+                fwd = R * math.sin(abs(theta))
+                lat = sign * R * (1.0 - math.cos(abs(theta)))
+                cx = x + fwd * math.cos(yaw) - lat * math.sin(yaw)
+                cy = y + fwd * math.sin(yaw) + lat * math.cos(yaw)
+                if bounds:
+                    bx0, by0, bx1, by1 = bounds
+                    m = FOOTPRINT_FORWARD_REACH
+                    if not (bx0 + m <= cx <= bx1 - m
+                            and by0 + m <= cy <= by1 - m):
+                        continue
+                goal = (cx, cy)
+                break
+
+            if goal is None:
+                log.append(
+                    "arc %d: no feasible arc - every curve this way ends "
+                    "outside the mapped area. Reducing the angle will NOT "
+                    "help; the problem is direction, not size. Move back "
+                    "toward the middle of the map first." % (attempt + 1))
+                break
+
+            res = self.navigate_to(goal[0], goal[1], yaw + theta)
+            after = self._pose()
+            if after is None:
+                log.append("arc %d: lost pose after move" % (attempt + 1))
+                break
+
+            got = math.degrees((after[2] - yaw + math.pi)
+                               % (2 * math.pi) - math.pi)
+            achieved_total = math.degrees((after[2] - yaw0 + math.pi)
+                                          % (2 * math.pi) - math.pi)
+            log.append("arc %d: asked %.0f, got %.0f (cumulative %.0f)"
+                       % (attempt + 1, step, got, achieved_total))
+
+            if "ABORTED" in res or "refused" in res:
+                log.append("arc %d aborted: %s"
+                           % (attempt + 1, res.split("DIAGNOSIS:")[-1][:180]))
+                break
+
+        err = target - achieved_total
+        head = ("Turn complete. Requested %.0f deg, ACHIEVED %.0f deg "
+                "(error %.0f). " % (target, achieved_total, err))
+        if abs(err) > 15.0:
+            head = ("Turn INCOMPLETE. Requested %.0f deg, ACHIEVED only "
+                    "%.0f deg, still %.0f deg short. Do NOT report this as "
+                    "done. " % (target, achieved_total, err))
+        return head + " | ".join(log) + " " + self.get_scan_summary()
+
+    def mark_here(self, name):
+        """Record the current pose under a name so it can be returned to.
+
+        Without this, 'come back to where you started' has nothing to bind
+        to and the model invents a distance.
+        """
+        return self.save_landmark(name)
+
     def navigate_to_landmark(self, name):
         lm = self.landmarks.get(name)
         if lm is None:
@@ -360,6 +555,11 @@ class RobotTools(Node):
         if abs(angular_z) > cap:
             angular_z = math.copysign(cap, angular_z)
 
+        upright, att = self.check_attitude()
+        if upright is False:
+            return "drive refused. " + att
+
+        before = self._pose()
         msg = Twist()
         msg.linear.x = linear_x
         msg.angular.z = angular_z
@@ -369,9 +569,24 @@ class RobotTools(Node):
             time.sleep(0.05)
         self.cmd_pub.publish(Twist())
 
-        return ("Drove at %.2f m/s, yaw rate %.2f rad/s for %.1fs, then "
-                "stopped. %s" % (linear_x, angular_z, duration,
-                                 self.get_pose()))
+        after = self._pose()
+        moved = None
+        if before and after:
+            moved = math.hypot(after[0] - before[0], after[1] - before[1])
+
+        intended = abs(linear_x) * duration
+        out = ("Drove at %.2f m/s for %.1fs. Commanded travel was "
+               "%.2fm (speed x time)." % (linear_x, duration, intended))
+        if moved is not None:
+            out += " ACTUAL DISPLACEMENT: %.2fm." % moved
+            if abs(moved - intended) > 0.25:
+                out += (" WARNING: actual displacement differs from commanded "
+                        "by %.2fm - the robot may have been obstructed or "
+                        "slipped." % abs(moved - intended))
+        out += (" Note: drive() moves speed x duration metres. To travel a "
+                "specific distance, compute duration = distance / speed, and "
+                "verify the result before reporting completion.")
+        return out + " " + self.get_pose()
 
     def stop(self):
         self.cmd_pub.publish(Twist())
@@ -407,6 +622,7 @@ class RobotTools(Node):
         lines.append("Nav2 action server: %s"
                      % ("OK" if self.nav_client.wait_for_server(
                          timeout_sec=2.0) else "NOT AVAILABLE"))
+        lines.append(self.check_attitude()[1])
         lines.append(self.check_map_bounds()[1])
         return "\n".join(lines)
 

@@ -22,6 +22,7 @@ import requests
 
 from .robot_tools import RobotTools, _spin
 from .tool_schemas import TOOLS, SYSTEM_PROMPT
+from .trace_log import TraceLog
 
 BACKEND = os.environ.get("BGLX_BACKEND", "ollama")
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
@@ -36,6 +37,7 @@ OPENAI_KEY_VAR = os.environ.get("BGLX_KEY_VAR", "BGLX_API_KEY")
 
 MAX_STEPS = 40
 MAX_TOKENS = 2000
+MAX_NUDGES = 2      # retries when the model describes a call instead of making one
 
 
 def to_openai_tools(tools):
@@ -199,17 +201,23 @@ class AnthropicBackend:
 
 
 class Agent:
-    def __init__(self, tools, backend):
+    def __init__(self, tools, backend, trace=None):
         self.tools = tools
         self.backend = backend
+        self.trace = trace
 
     def _dispatch(self, name, args):
         table = {
             "get_pose": lambda: self.tools.get_pose(),
             "get_scan_summary": lambda: self.tools.get_scan_summary(),
+            "check_attitude": lambda: self.tools.check_attitude()[1],
             "list_landmarks": lambda: self.tools.list_landmarks(),
             "navigate_to": lambda: self.tools.navigate_to(
                 args["x"], args["y"], args.get("yaw")),
+            "navigate_relative": lambda: self.tools.navigate_relative(
+                args.get("forward", 0.0), args.get("left", 0.0)),
+            "turn_by": lambda: self.tools.turn_by(args["degrees"]),
+            "mark_here": lambda: self.tools.mark_here(args["name"]),
             "navigate_to_landmark": lambda: self.tools.navigate_to_landmark(
                 args["name"]),
             "drive": lambda: self.tools.drive(
@@ -229,8 +237,28 @@ class Agent:
         except Exception as exc:
             return "Tool '%s' raised %s: %s" % (name, type(exc).__name__, exc)
 
+    def _describes_a_tool(self, text):
+        """Did the model talk about calling a tool instead of calling it?
+
+        Small models frequently emit 'drive(-0.5, 0, 2)' as prose. The tool
+        call never happens, the robot never moves, and without this check the
+        harness reports task completion.
+        """
+        if not text:
+            return False
+        names = ("get_pose", "get_scan_summary", "navigate_to", "drive",
+                 "wait", "stop", "list_landmarks", "get_last_failure",
+                 "navigate_relative", "turn_by", "mark_here", "check_attitude",
+                 "navigate_to_landmark")
+        return any(n in text for n in names)
+
     def run(self, task):
+        if self.trace:
+            self.trace.task_start(task)
         history = self.backend.start(task)
+        nudges = 0
+        acted = False      # has any tool run this task?
+        failed_calls = set()   # (tool, args) that already produced a failure
 
         for _ in range(MAX_STEPS):
             try:
@@ -242,18 +270,72 @@ class Agent:
 
             if text:
                 print("\n[agent] %s" % text)
+                if self.trace:
+                    self.trace.agent_text(text)
+
             if not calls:
+                # Only nudge if NOTHING has executed yet. Once a tool has run,
+                # a text-only reply is the model finishing the task, and
+                # nudging it drives the robot again without being asked.
+                if (not acted and self._describes_a_tool(text)
+                        and nudges < MAX_NUDGES):
+                    nudges += 1
+                    print("[harness] no tool call emitted - nudging (%d/%d)"
+                          % (nudges, MAX_NUDGES))
+                    if self.trace:
+                        self.trace.nudge(nudges)
+                    history.append({
+                        "role": "user",
+                        "content": ("You described a tool call in text but did "
+                                    "not actually emit one, so nothing "
+                                    "happened and the robot did not move. "
+                                    "Emit a real tool call now."),
+                    })
+                    continue
+                if self.trace:
+                    self.trace.task_end("complete", self.trace.step)
                 return
 
+            acted = True
             results = []
             for call in calls:
                 print("[tool ] %s(%s)" % (call.name, call.args))
+                sig = (call.name, json.dumps(call.args, sort_keys=True))
+                if sig in failed_calls:
+                    out = ("BLOCKED BY HARNESS: this exact call already failed "
+                           "in this task and was not retried. Read the earlier "
+                           "DIAGNOSIS and choose different arguments or a "
+                           "different tool.")
+                    print("[obs  ] %s\n" % out)
+                    results.append((call, out))
+                    continue
+
+                pose_before = self.tools._pose()
+                t_call = time.time()
                 out = self._dispatch(call.name, call.args)
+                elapsed = time.time() - t_call
+                pose_after = self.tools._pose()
+                upright, _att = self.tools.check_attitude()
+                if upright is False:
+                    out = str(out) + " " + _att
                 print("[obs  ] %s\n" % out)
+                _o = str(out)
+                if ("DIAGNOSIS:" in _o
+                        or _o.startswith(("REJECTED", "BLOCKED"))
+                        or "refused" in _o[:60]
+                        or "missing required argument" in _o
+                        or _o.startswith("Unknown tool")
+                        or " raised " in _o[:60]):
+                    failed_calls.add(sig)
+                if self.trace:
+                    self.trace.tool_call(call.name, call.args, out, elapsed,
+                                         pose_before, pose_after)
                 results.append((call, out))
             self.backend.add_results(history, results)
 
         print("\n[agent] Step limit reached. Stopping.")
+        if self.trace:
+            self.trace.task_end("step_limit", self.trace.step)
         self.tools.stop()
 
 
@@ -278,7 +360,9 @@ def main(argv=None):
     print("\nBackend: %s (%s)" % (backend.name, model))
     print("Describe a task, 'quit' to exit.\n")
 
-    agent = Agent(tools, backend)
+    trace = TraceLog(BACKEND, model)
+    print("Trace: %s" % trace.path)
+    agent = Agent(tools, backend, trace)
     try:
         while True:
             task = input("task> ").strip()
@@ -290,8 +374,14 @@ def main(argv=None):
     except (KeyboardInterrupt, EOFError):
         pass
     finally:
-        tools.stop()
-        rclpy.shutdown()
+        try:
+            tools.stop()
+        except Exception:
+            pass          # context already torn down by the signal handler
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

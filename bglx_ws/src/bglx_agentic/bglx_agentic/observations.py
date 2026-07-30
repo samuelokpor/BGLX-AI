@@ -12,11 +12,11 @@ import math
 # bglx_navigation/launch/navigation.launch.py. If you retune the trike there,
 # change them here too or every diagnosis below becomes a lie.
 WHEELBASE = 1.33          # m
-MAX_STEERING = 0.6        # rad
+MAX_STEERING = 1.047      # rad (60 deg)
 MAX_LINEAR_VEL = 2.78     # m/s
 
 # A tricycle's tightest circle. R = L / tan(delta_max)
-MIN_TURN_RADIUS = WHEELBASE / math.tan(MAX_STEERING)   # ~1.94 m
+MIN_TURN_RADIUS = WHEELBASE / math.tan(MAX_STEERING)   # ~0.77 m at 1.047 rad
 
 # Below this speed, steering does essentially nothing to the heading.
 MIN_SPEED_FOR_YAW = 0.15  # m/s
