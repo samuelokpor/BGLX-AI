@@ -19,7 +19,7 @@
        gives minimum turning radius R = L / tan(delta) ~ 1.95 m.
        Keep in sync with nav2_params planner minimum_turning_radius (>= R)
        and cmd_vel_limiter.py max_steering_angle. -->
-  <xacro:property name="max_steer" value="0.6"/>
+  <xacro:property name="max_steer" value="1.047"/>
 
   <xacro:macro name="front_fork" params="parent">
 
@@ -50,7 +50,7 @@
       <origin xyz="0 0 -0.05" rpy="0 0 0"/>
       <axis xyz="0 0 1"/>
       <limit effort="50.0" velocity="2.0" lower="${-max_steer}" upper="${max_steer}"/>
-      <dynamics damping="0.1" friction="0.05"/>
+      <dynamics damping="3.0" friction="0.5"/>
     </joint>
 
     <!-- FORK ASSEMBLY -->
@@ -118,7 +118,7 @@
     <joint name="front_wheel_joint" type="continuous">
       <parent link="steering_link"/>
       <child link="front_wheel"/>
-      <origin xyz="0.04 0 -0.28" rpy="0 0 0"/>
+      <origin xyz="-0.06 0 -0.28" rpy="0 0 0"/>
       <axis xyz="0 1 0"/>
       <dynamics damping="0.001" friction="0.001"/>
     </joint>
