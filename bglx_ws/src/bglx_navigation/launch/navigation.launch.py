@@ -68,7 +68,7 @@ def generate_launch_description():
             parameters=[{
                 'use_sim_time': use_sim_time,
                 'wheelbase': 1.33,
-                'max_steering_angle': 0.6,
+                'max_steering_angle': 1.047,
                 'max_lateral_accel': 1.5,
                 'max_linear_vel': 2.78,
                 'input_topic': '/etrike/cmd_vel',

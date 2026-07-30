@@ -46,7 +46,7 @@ controller_server:
       # Start conservative; raise desired_linear_vel toward 2.78 (10 km/h)
       # once tracking looks good.
       desired_linear_vel: 1.0
-      lookahead_dist: 0.9
+      lookahead_dist: 0.6
       min_lookahead_dist: 0.4
       max_lookahead_dist: 1.5
       lookahead_time: 1.5
@@ -56,13 +56,13 @@ controller_server:
       max_allowed_time_to_collision_up_to_carrot: 1.5
       # NON-HOLONOMIC: never rotate in place, never reverse (Dubins forward).
       use_rotate_to_heading: false
-      allow_reversing: false
+      allow_reversing: true
       min_approach_linear_velocity: 0.1
       approach_velocity_scaling_dist: 1.0
       # Slow down through tight curvature; min radius ties to the trike.
       use_regulated_linear_velocity_scaling: true
       use_cost_regulated_linear_velocity_scaling: false
-      regulated_linear_scaling_min_radius: 2.0
+      regulated_linear_scaling_min_radius: 1.0
       regulated_linear_scaling_min_speed: 0.25
       max_angular_accel: 2.0
       max_robot_pose_search_dist: 10.0
@@ -195,11 +195,11 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 5.0
-      motion_model_for_search: "DUBIN"     # forward-only. Use REEDS_SHEPP to allow reverse.
+      motion_model_for_search: "REEDS_SHEPP"     # allows reverse; DUBIN for forward-only. Reverse is UNSAFE on hardware: no rear sensing in the costmap.
       angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 3.0
-      minimum_turning_radius: 2.0          # >= URDF R (~1.95 m at 0.6 rad steer)
+      minimum_turning_radius: 0.9          # >= URDF R (0.77 m at 1.047 rad steer), plus margin
       reverse_penalty: 2.0
       change_penalty: 0.0
       non_straight_penalty: 1.2
