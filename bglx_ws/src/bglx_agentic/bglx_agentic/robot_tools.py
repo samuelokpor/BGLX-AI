@@ -427,100 +427,109 @@ class RobotTools(Node):
         return note + self.navigate_to(gx, gy, yaw)
 
     def turn_by(self, degrees):
-        """Change heading by driving arcs, measuring after each one.
+        """Change heading by driving the arc directly, measuring after each try.
 
-        Closed-loop on purpose. Nav2's yaw_goal_tolerance is 0.60 rad (34
-        deg) because a car-like body cannot fine-tune heading at a goal, so a
-        single commanded turn can legally finish 34 deg off and still report
-        SUCCEEDED. Measuring the achieved heading and re-issuing the shortfall
-        is the only way to get an accurate turn without tightening a
-        tolerance that exists for good reason.
+        Deliberately does NOT route through Nav2. Nav2's xy_goal_tolerance is
+        0.30m and yaw_goal_tolerance 0.60 rad (34 deg), so a small commanded
+        turn produces a goal inside BOTH tolerances: it reports SUCCEEDED
+        without moving. A 7 deg arc at minimum radius puts the goal 0.15m
+        away with a 7 deg heading change - invisible to the goal checker.
+
+        Ackermann kinematics give the answer exactly: omega = v tan(d) / L, so
+        a heading change of theta takes theta/omega seconds. Measure, compute
+        the shortfall, repeat.
+
+        No obstacle avoidance during the arc, so clearance is checked first.
         """
         target = float(degrees)
+        if abs(target) < 2.0:
+            return "Turn of %.0f deg is too small to be meaningful." % target
+
+        upright, att = self.check_attitude()
+        if upright is False:
+            return "turn_by refused. " + att
+
         start = self._pose()
         if start is None:
             return "turn_by failed: robot pose unavailable."
-        if start[3] != GLOBAL_FRAME:
-            return "turn_by refused: pose is in '%s', not 'map'." % start[3]
         yaw0 = start[2]
 
-        if abs(target) < 5.0:
-            return "Turn too small to execute; nothing done."
+        SPEED = 0.6
+        TOL = 3.0
+        omega_max = max_yaw_rate(SPEED)
 
-        MAX_ARC = 45.0        # per-arc cap; larger asks defeat the planner
-        TOL = 8.0             # degrees; good enough to stop iterating
+        # Which way to drive? Forward if there is room, else reverse.
+        summary = summarise_scan(self._scan)
+        need = 1.5
+        direction = 1.0
+        if summary:
+            front = min(summary.get("front", 99), summary.get("front-left", 99),
+                        summary.get("front-right", 99))
+            rear = min(summary.get("rear", 99), summary.get("rear-left", 99),
+                       summary.get("rear-right", 99))
+            if front < need and rear >= need:
+                direction = -1.0
+            elif front < need and rear < need:
+                return ("turn_by refused: only %.1fm ahead and %.1fm behind. "
+                        "This platform cannot pivot, so it needs about %.1fm "
+                        "of clear space in one direction to swing round. Move "
+                        "somewhere more open first." % (front, rear, need))
+
+        achieved = 0.0
         log = []
-        achieved_total = 0.0
-
-        for attempt in range(5):
-            remaining = target - achieved_total
+        for attempt in range(6):
+            remaining = target - achieved
             if abs(remaining) < TOL:
                 break
 
-            step = math.copysign(min(MAX_ARC, abs(remaining)), remaining)
-            theta = math.radians(step)
-            pose = self._pose()
-            if pose is None:
-                log.append("lost pose mid-turn")
-                break
-            x, y, yaw, _ = pose
+            # Reversing mirrors the steering-to-heading relationship.
+            sign = math.copysign(1.0, remaining) * direction
+            duration = min(5.0, abs(math.radians(remaining)) / omega_max)
 
-            with self._lock:
-                bounds = self._bounds
+            before = self._pose()
+            if before is None:
+                log.append("lost pose"); break
 
-            sign = 1.0 if theta > 0 else -1.0
-            goal = None
-            # Scale off the vehicle's actual capability. A hardcoded floor
-            # here silently ignores steering changes and turns wide.
-            for R in (MIN_TURN_RADIUS * 1.6,
-                      MIN_TURN_RADIUS * 1.3,
-                      MIN_TURN_RADIUS * 1.1):
-                fwd = R * math.sin(abs(theta))
-                lat = sign * R * (1.0 - math.cos(abs(theta)))
-                cx = x + fwd * math.cos(yaw) - lat * math.sin(yaw)
-                cy = y + fwd * math.sin(yaw) + lat * math.cos(yaw)
-                if bounds:
-                    bx0, by0, bx1, by1 = bounds
-                    m = FOOTPRINT_FORWARD_REACH
-                    if not (bx0 + m <= cx <= bx1 - m
-                            and by0 + m <= cy <= by1 - m):
-                        continue
-                goal = (cx, cy)
-                break
+            msg = Twist()
+            msg.linear.x = SPEED * direction
+            msg.angular.z = omega_max * sign * direction
+            t0 = time.time()
+            while time.time() - t0 < duration:
+                self.cmd_pub.publish(msg)
+                time.sleep(0.05)
+            self.cmd_pub.publish(Twist())
+            time.sleep(0.4)          # let it settle before measuring
 
-            if goal is None:
-                log.append(
-                    "arc %d: no feasible arc - every curve this way ends "
-                    "outside the mapped area. Reducing the angle will NOT "
-                    "help; the problem is direction, not size. Move back "
-                    "toward the middle of the map first." % (attempt + 1))
-                break
-
-            res = self.navigate_to(goal[0], goal[1], yaw + theta)
             after = self._pose()
             if after is None:
-                log.append("arc %d: lost pose after move" % (attempt + 1))
-                break
-
-            got = math.degrees((after[2] - yaw + math.pi)
+                log.append("lost pose after arc"); break
+            got = math.degrees((after[2] - before[2] + math.pi)
                                % (2 * math.pi) - math.pi)
-            achieved_total = math.degrees((after[2] - yaw0 + math.pi)
-                                          % (2 * math.pi) - math.pi)
-            log.append("arc %d: asked %.0f, got %.0f (cumulative %.0f)"
-                       % (attempt + 1, step, got, achieved_total))
+            achieved += got
+            log.append("arc %d: %.1fs %s, got %.0f (cumulative %.0f)"
+                       % (attempt + 1, duration,
+                          "forward" if direction > 0 else "reverse",
+                          got, achieved))
 
-            if "ABORTED" in res or "refused" in res:
-                log.append("arc %d aborted: %s"
-                           % (attempt + 1, res.split("DIAGNOSIS:")[-1][:180]))
-                break
+            up, att2 = self.check_attitude()
+            if up is False:
+                return "Turn ABORTED. " + att2 + " " + " | ".join(log)
 
-        err = target - achieved_total
-        head = ("Turn complete. Requested %.0f deg, ACHIEVED %.0f deg "
-                "(error %.0f). " % (target, achieved_total, err))
-        if abs(err) > 15.0:
-            head = ("Turn INCOMPLETE. Requested %.0f deg, ACHIEVED only "
-                    "%.0f deg, still %.0f deg short. Do NOT report this as "
-                    "done. " % (target, achieved_total, err))
+        err = target - achieved
+        end = self._pose()
+        moved = (math.hypot(end[0] - start[0], end[1] - start[1])
+                 if end else 0.0)
+
+        if abs(achieved) < 2.0:
+            head = ("Turn FAILED: requested %.0f deg, the robot did not rotate "
+                    "at all. Check check_systems before retrying; a smaller "
+                    "angle will not help. " % target)
+        elif abs(err) > 10.0:
+            head = ("Turn INCOMPLETE: requested %.0f deg, achieved %.0f, still "
+                    "%.0f short. Do NOT report this as done. " % (target, achieved, err))
+        else:
+            head = ("Turn complete. Requested %.0f deg, achieved %.0f (error "
+                    "%.0f), travelled %.2fm. " % (target, achieved, err, moved))
         return head + " | ".join(log) + " " + self.get_scan_summary()
 
     def mark_here(self, name):
