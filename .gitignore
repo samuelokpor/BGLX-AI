@@ -13,3 +13,6 @@ lidar_ws/
 # vendored on the Pi (built from Dockerfile / cloned)
 deps/
 lidar_ws/
+
+# saved maps: large binaries, regenerate with the explorer
+maps/
