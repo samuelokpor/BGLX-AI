@@ -13,6 +13,7 @@ is backend-agnostic. Only complete() and the schema conversion differ.
 """
 
 import json
+import re
 import os
 import sys
 import time
@@ -210,6 +211,8 @@ class Agent:
         table = {
             "get_pose": lambda: self.tools.get_pose(),
             "get_scan_summary": lambda: self.tools.get_scan_summary(),
+            "look": lambda: self.tools.look(args.get("question")),
+            "check_map_against_sensors": lambda: self.tools.check_map_against_sensors(),
             "check_attitude": lambda: self.tools.check_attitude()[1],
             "list_landmarks": lambda: self.tools.list_landmarks(),
             "navigate_to": lambda: self.tools.navigate_to(
@@ -236,6 +239,42 @@ class Agent:
             return "Tool '%s' missing required argument %s" % (name, exc)
         except Exception as exc:
             return "Tool '%s' raised %s: %s" % (name, type(exc).__name__, exc)
+
+    def _looks_like_an_uncalled_invocation(self, text):
+        """Is this text an attempted tool call rather than a summary?
+
+        Small models often print 'navigate_to_landmark {"name": "home"}'
+        instead of emitting a call. Nothing executes, and without this check
+        the harness reports the task complete.
+
+        Distinguishing an ATTEMPT from a SUMMARY matters: nudging after a
+        successful move once drove the trike three times when asked for two
+        metres. So this looks for invocation SYNTAX - a tool name followed by
+        braces, parens or a JSON-ish argument - not merely a tool name in
+        prose.
+        """
+        if not text:
+            return False
+        names = ("get_pose", "get_scan_summary", "navigate_to_landmark",
+                 "navigate_relative", "navigate_to", "turn_by", "mark_here",
+                 "drive", "wait", "stop", "list_landmarks",
+                 "get_last_failure", "check_attitude", "check_systems", "look")
+        for n in names:
+            if re.search(re.escape(n) + r"\s*[\({\[]", text):
+                return True
+            if re.search(re.escape(n) + r'\s*[:=]\s*["{\[]', text):
+                return True
+        # a bare tool name on its own line is also an attempt
+        for line in text.strip().splitlines():
+            if line.strip() in names:
+                return True
+        # An INVENTED name still signals intent to call something. A 7B was
+        # observed emitting CallCheckAgainstSensors() for a tool that does not
+        # exist; without this it looks like a plain text reply and the task
+        # silently ends.
+        if re.search(r"\b[A-Za-z_][A-Za-z0-9_]{6,}\s*\(\s*\)", text):
+            return True
+        return False
 
     def _describes_a_tool(self, text):
         """Did the model talk about calling a tool instead of calling it?
@@ -277,7 +316,10 @@ class Agent:
                 # Only nudge if NOTHING has executed yet. Once a tool has run,
                 # a text-only reply is the model finishing the task, and
                 # nudging it drives the robot again without being asked.
-                if (not acted and self._describes_a_tool(text)
+                # Nudge when the model ATTEMPTED a call and it did not
+                # execute, whether or not something ran earlier this turn.
+                # A plain summary after a successful action is not an attempt.
+                if (self._looks_like_an_uncalled_invocation(text)
                         and nudges < MAX_NUDGES):
                     nudges += 1
                     print("[harness] no tool call emitted - nudging (%d/%d)"
@@ -286,10 +328,13 @@ class Agent:
                         self.trace.nudge(nudges)
                     history.append({
                         "role": "user",
-                        "content": ("You described a tool call in text but did "
-                                    "not actually emit one, so nothing "
-                                    "happened and the robot did not move. "
-                                    "Emit a real tool call now."),
+                        "content": (
+                            "You wrote a tool call as text instead of emitting "
+                            "one, so nothing happened. If you used a name that "
+                            "is not in your tool list, use the correct one. "
+                            "The available tools are: " + ", ".join(
+                                sorted(t["name"] for t in TOOLS)) +
+                            ". Emit a real tool call now."),
                     })
                     continue
                 if self.trace:

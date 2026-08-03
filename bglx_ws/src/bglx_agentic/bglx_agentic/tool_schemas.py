@@ -67,6 +67,37 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "check_map_against_sensors",
+        "description": ("Compare the saved map with what the LiDAR sees right "
+                        "now. Reports things PRESENT that the map does not "
+                        "know about (a parked vehicle, a delivery, a barrier) "
+                        "and things GONE that the map still records. Call this "
+                        "before committing to a narrow route, and whenever "
+                        "navigation fails in a place the map says is clear. "
+                        "Also reports how confident the localisation is - a "
+                        "mismatch while poorly localised usually means the "
+                        "robot is lost, not that the world has changed."),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "look",
+        "description": ("Look through the front camera and get a description "
+                        "of WHAT is ahead, not just how far. Use this when "
+                        "the LiDAR reports an obstacle and the right response "
+                        "depends on what it is: a person who will move, a van "
+                        "unloading, cones marking a closure, or a permanent "
+                        "fixture. Also use it before reporting that a route "
+                        "is blocked. Slower than get_scan_summary and gives "
+                        "no distances - pair the two."),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string",
+                             "description": "optional specific question about the scene"},
+            },
+        },
+    },
+    {
         "name": "get_scan_summary",
         "description": ("Nearest obstacle distance in each of eight sectors "
                         "around the robot, from the LIDAR."),
@@ -144,7 +175,12 @@ TOOLS = [
     },
     {
         "name": "navigate_to_landmark",
-        "description": "Drive to a previously recorded named location.",
+        "description": ("Drive to a previously recorded named location in ONE "
+                        "call. Use this whenever the task mentions going back, "
+                        "returning, or a place name - 'go home', 'back to the "
+                        "dock', 'return to the loading bay'. Do NOT step "
+                        "backwards with navigate_relative to reach a landmark; "
+                        "Nav2 plans the whole route for you."),
         "input_schema": {
             "type": "object",
             "properties": {"name": {"type": "string"}},

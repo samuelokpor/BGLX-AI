@@ -29,13 +29,16 @@ from rclpy.qos import (QoSProfile, ReliabilityPolicy, HistoryPolicy,
                        DurabilityPolicy)
 
 from geometry_msgs.msg import Twist, Quaternion
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, Image
 from nav2_msgs.action import NavigateToPose
 
 import tf2_ros
 from tf2_ros import TransformException
 
+from .vision import VisionTool
+from .map_check import compare as compare_map, confidence_note
 from .observations import (summarise_scan, format_scan, diagnose_nav_failure,
                            MIN_TURN_RADIUS, MAX_LINEAR_VEL,
                            MIN_SPEED_FOR_YAW, max_yaw_rate)
@@ -86,6 +89,7 @@ class RobotTools(Node):
                                '/tricycle_steering_controller/odometry')
         self.declare_parameter('costmap_topic', '/global_costmap/costmap')
         self.declare_parameter('cmd_vel_topic', '/etrike/cmd_vel')
+        self.declare_parameter('camera_topic', '/etrike/front/image_raw')
         self.declare_parameter('landmarks_file',
                                os.path.expanduser('~/.bglx_landmarks.yaml'))
 
@@ -93,6 +97,7 @@ class RobotTools(Node):
         odom_topic = self.get_parameter('odom_topic').value
         costmap_topic = self.get_parameter('costmap_topic').value
         cmd_vel_topic = self.get_parameter('cmd_vel_topic').value
+        camera_topic = self.get_parameter('camera_topic').value
         self.landmarks_path = self.get_parameter('landmarks_file').value
 
         self.cb_group = ReentrantCallbackGroup()
@@ -102,6 +107,9 @@ class RobotTools(Node):
         self._scan = None
         self._odom = None
         self._bounds = None
+        self._static_grid = None
+        self._static_info = None
+        self._cov = None
         self._plan_len = 0
         self._counts = {'scan': 0, 'odom': 0, 'costmap': 0}
         self._lock = threading.Lock()
@@ -116,6 +124,16 @@ class RobotTools(Node):
                                  callback_group=self.cb_group)
         self.create_subscription(Path, '/plan', self._on_plan, 1,
                                  callback_group=self.cb_group)
+        # The saved map, and how confident AMCL is that we are where we think.
+        self.create_subscription(OccupancyGrid, '/map', self._on_static_map,
+                                 MAP_QOS, callback_group=self.cb_group)
+        self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose',
+                                 self._on_amcl, 10,
+                                 callback_group=self.cb_group)
+
+        self.vision = VisionTool(self.get_logger())
+        self.create_subscription(Image, camera_topic, self.vision.on_image,
+                                 SENSOR_QOS, callback_group=self.cb_group)
 
         self.cmd_pub = self.create_publisher(Twist, cmd_vel_topic, 10)
         self.nav_client = ActionClient(self, NavigateToPose,
@@ -137,6 +155,15 @@ class RobotTools(Node):
         with self._lock:
             self._odom = msg
             self._counts['odom'] += 1
+
+    def _on_static_map(self, msg):
+        with self._lock:
+            self._static_grid = list(msg.data)
+            self._static_info = msg.info
+
+    def _on_amcl(self, msg):
+        with self._lock:
+            self._cov = list(msg.pose.covariance)
 
     def _on_plan(self, msg):
         with self._lock:
@@ -281,6 +308,30 @@ class RobotTools(Node):
         with self._lock:
             scan = self._scan
         return format_scan(summarise_scan(scan))
+
+    def check_map_against_sensors(self):
+        """Does the saved map still match what the LiDAR sees?"""
+        pose = self._pose()
+        if pose is None:
+            return "Cannot compare: robot pose unavailable."
+        if pose[3] != GLOBAL_FRAME:
+            return ("Cannot compare: pose is in '%s', not 'map'. AMCL has not "
+                    "localised yet." % pose[3])
+        with self._lock:
+            scan = self._scan
+            grid = self._static_grid
+            info = self._static_info
+            cov = self._cov
+        return compare_map(scan, grid, info, (pose[0], pose[1]), pose[2], cov)
+
+    def localisation_confidence(self):
+        with self._lock:
+            cov = self._cov
+        return confidence_note(cov)[1]
+
+    def look(self, question=None):
+        """Semantic description of what the front camera sees."""
+        return self.vision.look(question)
 
     def get_last_failure(self):
         return self._last_failure
@@ -631,6 +682,10 @@ class RobotTools(Node):
         lines.append("Nav2 action server: %s"
                      % ("OK" if self.nav_client.wait_for_server(
                          timeout_sec=2.0) else "NOT AVAILABLE"))
+        nf = self.vision.frames_received()
+        lines.append("Camera frames: %d%s"
+                     % (nf, "" if nf else "   <-- NOTHING ARRIVING"))
+        lines.append(self.localisation_confidence())
         lines.append(self.check_attitude()[1])
         lines.append(self.check_map_bounds()[1])
         return "\n".join(lines)
