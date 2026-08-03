@@ -251,3 +251,67 @@ waypoint_follower:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
       enabled: true
       waypoint_pause_duration: 200
+# ---------------------------------------------------------------------------
+# AMCL: localise against a saved map instead of mapping continuously.
+#
+# Tuned for a steered tricycle, which matters in two places:
+#   - the motion model is 'omnidirectional' NOT 'differential'. Nav2's
+#     differential model assumes rotation can happen without translation; on
+#     this platform it cannot, so the differential model mis-predicts particle
+#     spread on every turn.
+#   - alpha1 (rotation noise from rotation) is kept low because the EKF now
+#     fuses a gyro, so heading is far more trustworthy than wheel odometry
+#     alone would justify.
+#
+# The particle spread published in /amcl_pose covariance is the confidence
+# signal the stack has been missing: a spreading cloud means the robot is
+# losing track, which nothing else can currently detect.
+# ---------------------------------------------------------------------------
+amcl:
+  ros__parameters:
+    use_sim_time: true
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    global_frame_id: map
+    scan_topic: /etrike/scan
+    robot_model_type: "nav2_amcl::OmniMotionModel"
+
+    min_particles: 500
+    max_particles: 3000
+    update_min_d: 0.20              # metres of travel before an update
+    update_min_a: 0.15              # radians of rotation before an update
+    resample_interval: 1
+    transform_tolerance: 1.0
+
+    # motion noise: how much odometry is distrusted
+    alpha1: 0.10                    # rotation noise from rotation (low: gyro)
+    alpha2: 0.20                    # rotation noise from translation
+    alpha3: 0.20                    # translation noise from translation
+    alpha4: 0.10                    # translation noise from rotation
+    alpha5: 0.10                    # strafe noise (omni model)
+
+    laser_model_type: "likelihood_field"
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 25.0
+    laser_min_range: 0.45
+    max_beams: 120
+    sigma_hit: 0.2
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    lambda_short: 0.1
+
+    # Kidnapped-robot recovery. A converged filter has no particles near the
+    # truth after a teleport, so it cannot recover by resampling alone. These
+    # inject random particles when the short-term likelihood average falls
+    # below the long-term one, i.e. when observations stop fitting.
+    recovery_alpha_slow: 0.001
+    recovery_alpha_fast: 0.1
+
+    pf_err: 0.05
+    pf_z: 0.99
+    do_beamskip: false
+    tf_broadcast: true
+    save_pose_rate: 0.5
+    set_initial_pose: false
