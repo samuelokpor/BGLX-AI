@@ -1,0 +1,72 @@
+### EKF for the BGLX e-trike: fuses wheel odometry with the IMU.
+###
+### WHY THIS EXISTS
+### The tricycle_steering_controller infers yaw rate from steering angle and
+### wheel velocities. Both inputs lie during a turn: steering_joint is
+### position-controlled so the wheel lags the command, and two driven rear
+### wheels on a fixed axle must scrub when cornering. Wheel odometry cannot
+### see either error, so heading drifts, and heading error compounds much
+### faster than translation - 5 deg of yaw error is 0.9m of lateral error
+### after 10m of driving.
+###
+### A gyro measures rotation directly. Fusing the two removes the dominant
+### drift term, and it also anchors heading when scan matching is ambiguous:
+### in a symmetric courtyard the matcher flips between 0/90/180/270 degree
+### hypotheses, and a gyro rejects all but one.
+###
+### WHAT IS FUSED, AND WHAT DELIBERATELY IS NOT
+###   from wheel odometry: FORWARD VELOCITY only. Encoders measure this well.
+###   from the IMU:        YAW RATE only.
+###
+### The IMU's absolute orientation is NOT used, even though Gazebo publishes a
+### perfect one. The physical trike carries an MPU6050, a 6-axis part with no
+### magnetometer and therefore no absolute heading. Using Gazebo's orientation
+### would make simulation results unachievable on hardware and quietly hide
+### the drift this whole exercise is about measuring.
+
+ekf_filter_node:
+  ros__parameters:
+    use_sim_time: true
+
+    frequency: 50.0
+    sensor_timeout: 0.2
+    two_d_mode: true
+    transform_time_offset: 0.0
+    transform_timeout: 0.0
+    print_diagnostics: true
+    debug: false
+    permit_corrected_publication: false
+    publish_acceleration: false
+    publish_tf: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom
+
+    odom0: /tricycle_steering_controller/odometry
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_queue_size: 10
+    odom0_nodelay: true
+    odom0_differential: false
+    odom0_relative: false
+
+    imu0: /etrike/imu
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_nodelay: true
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 20
+    imu0_remove_gravitational_acceleration: true
+
+    process_noise_covariance: [0.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.008, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.008, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01]
+
+    initial_estimate_covariance: [1e-9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e-9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e-9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e-9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e-9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1e-9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
