@@ -164,11 +164,16 @@ def generate_launch_description():
     # --- odom TF relay ---
     # Started only after the controller is active, so the source topic
     # already exists and relay does not have to discover it cold.
-    odom_tf_relay = Node(
-        package='topic_tools', executable='relay',
-        name='odom_tf_relay', output='screen',
-        parameters=[{'use_sim_time': use_sim_time}],
-        arguments=[ODOM_TF_TOPIC, '/tf'],
+    # The EKF owns odom -> base_link. The tricycle controller no longer
+    # publishes it (enable_odom_tf: false in controllers.yaml) because two
+    # nodes broadcasting the same transform produces TF jitter that is
+    # miserable to debug.
+    ekf_node = Node(
+        package='robot_localization', executable='ekf_node',
+        name='ekf_filter_node', output='screen',
+        parameters=[os.path.join(
+            get_package_share_directory('bglx_navigation'),
+            'config', 'ekf.yaml')],
     )
 
     # Sequence:
@@ -183,7 +188,7 @@ def generate_launch_description():
     )
 
     relay_after_tricycle = RegisterEventHandler(
-        OnProcessExit(target_action=tricycle_spawner, on_exit=[odom_tf_relay])
+        OnProcessExit(target_action=tricycle_spawner, on_exit=[ekf_node])
     )
 
     return LaunchDescription([
