@@ -19,6 +19,7 @@ setup(
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
+            'recovery = bglx_agentic.recovery_node:main',
             'inspect = bglx_agentic.robot_tools:main',
             'record_landmark = bglx_agentic.robot_tools:record_landmark',
             'agent = bglx_agentic.agent_loop:main',
