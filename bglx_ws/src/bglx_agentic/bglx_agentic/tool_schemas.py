@@ -80,6 +80,31 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "check_width",
+        "description": ("Measure the gap in a given direction and say whether "
+                        "the vehicle fits. Call this BEFORE entering any "
+                        "archway, doorway, alley or narrow passage. This "
+                        "platform cannot rotate in place, so if it enters "
+                        "somewhere too narrow it cannot turn around and gets "
+                        "stranded - the check is worthless once you are "
+                        "already inside."),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "direction_deg": {"type": "number",
+                                  "description": "relative to current heading: 0 ahead, 90 left, -90 right, 180 behind"},
+            },
+        },
+    },
+    {
+        "name": "check_turn_around",
+        "description": ("Is there room to reverse direction here? The vehicle "
+                        "needs about 1.6m of clear space in every direction "
+                        "because it cannot pivot. Ask before committing to "
+                        "anywhere constrained."),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "look",
         "description": ("Look through the front camera and get a description "
                         "of WHAT is ahead, not just how far. Use this when "

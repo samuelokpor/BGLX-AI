@@ -39,6 +39,7 @@ from tf2_ros import TransformException
 
 from .vision import VisionTool
 from .map_check import compare as compare_map, confidence_note
+from .corridor import check_corridor, can_turn_around
 from .observations import (summarise_scan, format_scan, diagnose_nav_failure,
                            MIN_TURN_RADIUS, MAX_LINEAR_VEL,
                            MIN_SPEED_FOR_YAW, max_yaw_rate)
@@ -328,6 +329,17 @@ class RobotTools(Node):
         with self._lock:
             cov = self._cov
         return confidence_note(cov)[1]
+
+    def check_width(self, direction_deg=0.0):
+        """Will the vehicle fit through the gap in that direction?"""
+        with self._lock:
+            scan = self._scan
+        return check_corridor(scan, float(direction_deg))
+
+    def check_turn_around(self):
+        with self._lock:
+            scan = self._scan
+        return can_turn_around(scan)[1]
 
     def look(self, question=None):
         """Semantic description of what the front camera sees."""
