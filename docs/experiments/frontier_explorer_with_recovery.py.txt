@@ -1,0 +1,513 @@
+#!/usr/bin/env python3
+"""BGLX frontier exploration — info-gain per A*-path-cost scoring.
+
+Faithful ROS 2 / Nav2 port of the DIMOS WavefrontFrontierExplorer
+(dimensionalOS/dimos PR #2830). Per frontier:
+
+    score = info_gain / (1 + path_cost) * (1 + 0.5 * momentum)   (anti-revisit fade)
+
+- Frontier cell = UNKNOWN, adjacent to >=1 FREE, adjacent to NO occupied cell.
+- path_cost = real travel distance from the robot over the inflated map via a
+  single Dijkstra (occupied blocked, unknown traversable-but-penalized) — same
+  ranking as per-frontier A*, one pass.
+- Unreachable (cost inf) -> excluded. momentum = bearing alignment with last dir.
+- Self-terminates on sustained no information gain.
+Nav2 drives via NavigateToPose; this node only selects goals.
+"""
+import math
+from collections import deque
+
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from rclpy.action import ActionClient
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy, HistoryPolicy
+from nav_msgs.msg import OccupancyGrid
+from geometry_msgs.msg import PoseStamped, Quaternion
+from bglx_msgs.msg import RecoveryRequest, RecoveryResult
+from nav2_msgs.action import NavigateToPose
+from action_msgs.msg import GoalStatus
+from tf2_ros import Buffer, TransformListener
+
+
+def yaw_to_quat(yaw):
+    q = Quaternion(); q.z = math.sin(yaw / 2.0); q.w = math.cos(yaw / 2.0); return q
+
+
+class FrontierExplorer(Node):
+    def __init__(self):
+        super().__init__('frontier_explorer')
+        p = self.declare_parameter
+        p('map_topic', '/map'); p('global_frame', 'map'); p('robot_base_frame', 'base_link')
+        p('nav_action', 'navigate_to_pose'); p('min_frontier_perimeter', 0.5)
+        p('occupancy_threshold', 65); p('safe_distance', 3.0); p('info_gain_threshold', 0.03)
+        p('num_no_gain_attempts', 2); p('goal_timeout', 15.0); p('unknown_traversal_penalty', 3.0)
+        p('blacklist_radius', 2.5); p('max_goal_failures', 3); p('explored_memory', 20)
+        p('stall_timeout', 15.0); p('stall_distance', 0.25)
+        p('inflation_radius', 0.25); p('info_radius', 0.6); p('period', 1.0)
+        g = lambda n: self.get_parameter(n).value
+        self.map_topic = g('map_topic'); self.global_frame = g('global_frame'); self.base_frame = g('robot_base_frame')
+        self.min_perim = g('min_frontier_perimeter'); self.occ_th = g('occupancy_threshold')
+        self.safe_dist = g('safe_distance'); self.info_gain_th = g('info_gain_threshold')
+        self.num_no_gain = g('num_no_gain_attempts'); self.goal_timeout = g('goal_timeout')
+        self.blacklist_radius = g('blacklist_radius'); self.max_goal_failures = int(g('max_goal_failures'))
+        self.explored_memory = int(g('explored_memory'))
+        # Elapsed time alone is a poor failure signal: a goal that has not
+        # moved the robot at all is failing whether 20s or 90s remain. The
+        # long timeout exists for legitimately long routes, not for grinding
+        # against a wall.
+        self.stall_timeout = g('stall_timeout')
+        self.stall_distance = g('stall_distance')
+        self._last_progress = None
+        self._progress_xy = None
+        # If consecutive goals in DIFFERENT directions all stall with zero
+        # movement, the vehicle is the problem, not the frontiers. Blacklisting
+        # in that state marks the whole world unreachable on false evidence:
+        # observed nine goals at bearings spanning 180 degrees all stalling at
+        # 0.00m while the trike was wedged against a wall.
+        self._zero_move_streak = 0
+        # A stall is usually positional: the vehicle is somewhere it cannot
+        # drive out of, and selecting a different frontier fails identically.
+        # Ask something that can reposition, rather than blaming the frontier.
+        self.recovery_pub = self.create_publisher(
+            RecoveryRequest, '/bglx/recovery_request', 10)
+        self.create_subscription(RecoveryResult, '/bglx/recovery_result',
+                                 self._on_recovery_result, 10)
+        self.recovering = False
+        self.recovery_deadline = None
+        self.last_diagnosis = ''
+        # (x, y, consecutive_failures). A frontier Nav2 cannot reach must be
+        # excluded, or it is re-selected forever: this explorer spent 17 hours
+        # retrying one goal beyond a 3.5m gate arch.
+        self.blacklist = []
+        self.current_goal = None
+        self.done = False
+        self.unk_pen = g('unknown_traversal_penalty'); self.infl = g('inflation_radius'); self.info_radius = g('info_radius')
+        self.grid = None; self.res = None; self.ox = self.oy = 0.0
+        self.explored_goals = []; self.expl_dir = (0.0, 0.0)
+        self.last_info = None; self.no_gain = 0
+        self.busy = False; self.goal_start = None; self._goal_handle = None
+        self.goals_published = 0; self.consecutive_fail = 0
+        qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                         reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
+        self.create_subscription(OccupancyGrid, self.map_topic, self.on_map, qos)
+        self.tf_buffer = Buffer(); self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.nav = ActionClient(self, NavigateToPose, g('nav_action'))
+        self.create_timer(g('period'), self.tick)
+        self.get_logger().info('Frontier explorer up — waiting for /map and Nav2...')
+
+    def on_map(self, msg):
+        w, h = msg.info.width, msg.info.height
+        self.grid = np.array(msg.data, dtype=np.int16).reshape(h, w)
+        self.res = msg.info.resolution
+        self.ox = msg.info.origin.position.x; self.oy = msg.info.origin.position.y
+
+    def robot_cell(self):
+        try:
+            t = self.tf_buffer.lookup_transform(self.global_frame, self.base_frame, rclpy.time.Time())
+        except Exception:
+            return None
+        wx = t.transform.translation.x; wy = t.transform.translation.y
+        return (int((wx - self.ox) / self.res), int((wy - self.oy) / self.res), wx, wy)
+
+    def world_to_cell(self, wx, wy):
+        """Inverse of cell_to_world."""
+        return (int((wx - self.ox) / self.res), int((wy - self.oy) / self.res))
+
+    def cell_to_world(self, cx, cy):
+        return (self.ox + (cx + 0.5) * self.res, self.oy + (cy + 0.5) * self.res)
+
+    @staticmethod
+    def _neigh_any(mask):
+        H, W = mask.shape; out = np.zeros_like(mask)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy == 0: continue
+                s = np.zeros_like(mask)
+                s[max(0, -dy):H - max(0, dy), max(0, -dx):W - max(0, dx)] = \
+                    mask[max(0, dy):H - max(0, -dy), max(0, dx):W - max(0, -dx)]
+                out |= s
+        return out
+
+    def _inflate(self, occ):
+        n = int(round(self.infl / self.res)); m = occ.copy()
+        for _ in range(n): m = self._neigh_any(m) | m
+        return m
+
+    def detect_frontiers(self, occ):
+        unknown = self.grid < 0; free = self.grid == 0
+        fmask = unknown & self._neigh_any(free) & (~self._neigh_any(occ))
+        min_cells = max(1, int(self.min_perim / self.res))
+        ys, xs = np.where(fmask); seen = np.zeros_like(fmask); frontiers = []
+        for sx, sy in zip(xs.tolist(), ys.tolist()):
+            if seen[sy, sx]: continue
+            q = deque([(sx, sy)]); comp = []; seen[sy, sx] = True
+            while q:
+                x, y = q.popleft(); comp.append((x, y))
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < fmask.shape[1] and 0 <= ny < fmask.shape[0] and fmask[ny, nx] and not seen[ny, nx]:
+                            seen[ny, nx] = True; q.append((nx, ny))
+            if len(comp) < min_cells:
+                continue
+
+            # The centroid of a frontier running ALONG a wall can land inside
+            # the wall, or in a cell the footprint cannot occupy. Nav2 then
+            # plans to a pose the vehicle cannot reach, the controller cannot
+            # follow it, and the goal stalls. Observed repeatedly against the
+            # south range of the quad: four goals at y ~ -23.5, every one
+            # stalling, every one recovered, every one re-selected.
+            cx = sum(p[0] for p in comp) / len(comp)
+            cy = sum(p[1] for p in comp) / len(comp)
+            ix, iy = int(round(cx)), int(round(cy))
+
+            if not (0 <= ix < occ.shape[1] and 0 <= iy < occ.shape[0]):
+                continue
+            if occ[iy, ix]:
+                # Centroid is in inflated obstacle space. Fall back to the
+                # component cell furthest from any obstacle.
+                best = None
+                for x, y in comp:
+                    if 0 <= x < occ.shape[1] and 0 <= y < occ.shape[0] \
+                            and not occ[y, x]:
+                        best = (x, y)
+                        break
+                if best is None:
+                    continue
+                ix, iy = best
+
+            frontiers.append((float(ix), float(iy), len(comp)))
+        return frontiers
+
+    def dijkstra(self, occ, start):
+        import heapq
+        H, W = self.grid.shape; cost = np.full((H, W), np.inf); sx, sy = start
+        if occ[sy, sx]:
+            q = deque([(sx, sy)]); seen = {(sx, sy)}; found = None
+            while q and found is None:
+                x, y = q.popleft()
+                if not occ[y, x]: found = (x, y); break
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < W and 0 <= ny < H and (nx, ny) not in seen:
+                            seen.add((nx, ny)); q.append((nx, ny))
+            if found: sx, sy = found
+        unknown = self.grid < 0; cost[sy, sx] = 0.0; pq = [(0.0, sx, sy)]
+        while pq:
+            c, x, y = heapq.heappop(pq)
+            if c > cost[y, x]: continue
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx == 0 and dy == 0: continue
+                    nx, ny = x + dx, y + dy
+                    if not (0 <= nx < W and 0 <= ny < H) or occ[ny, nx]: continue
+                    step = math.hypot(dx, dy) * (self.unk_pen if unknown[ny, nx] else 1.0)
+                    if c + step < cost[ny, nx]:
+                        cost[ny, nx] = c + step; heapq.heappush(pq, (c + step, nx, ny))
+        return cost
+
+    def score(self, fr, cost_field, rwx, rwy):
+        cx, cy, size = fr; pc = cost_field[int(round(cy)), int(round(cx))]
+        if not np.isfinite(pc): return float('-inf'), None
+        path_cost = pc * self.res
+        info_gain = min(size / (self.min_perim / self.res * 10.0), 1.0)
+        wx, wy = self.cell_to_world(cx, cy)
+        for bx, by, n in self.blacklist:
+            if n >= self.max_goal_failures and math.hypot(wx - bx, wy - by) < self.blacklist_radius:
+                return float('-inf'), None
+        dxu, dyu = wx - rwx, wy - rwy; mag = math.hypot(dxu, dyu)
+        momentum = 0.0
+        if mag > 0.1 and (self.expl_dir[0] or self.expl_dir[1]):
+            momentum = max(0.0, (self.expl_dir[0] * dxu + self.expl_dir[1] * dyu) / mag)
+        s = info_gain / (1.0 + path_cost) * (1.0 + 0.5 * momentum)
+        if self.explored_goals:
+            dmin = min(math.hypot(wx - gx, wy - gy) for gx, gy in self.explored_goals)
+            if dmin < self.safe_dist: s *= dmin / self.safe_dist
+        return s, (wx, wy)
+
+    def count_info(self, occ):
+        return int(np.sum(self.grid == 0) + np.sum(occ))
+
+    def tick(self):
+        if self.done:
+            return
+        if self.recovering:
+            return          # paused while something repositions the vehicle
+        if self.grid is None or self.busy:
+            if self.busy and self.goal_start is not None:
+                now = self.get_clock().now()
+                rc_now = self.robot_cell()
+
+                # progress check
+                if rc_now is not None:
+                    xy = (rc_now[2], rc_now[3])
+                    if self._progress_xy is None:
+                        self._progress_xy = xy; self._last_progress = now
+                    else:
+                        moved = math.hypot(xy[0] - self._progress_xy[0],
+                                           xy[1] - self._progress_xy[1])
+                        if moved > self.stall_distance:
+                            self._progress_xy = xy; self._last_progress = now
+                        elif self._last_progress is not None and \
+                                (now - self._last_progress).nanoseconds * 1e-9 > self.stall_timeout:
+                            if moved < 0.05:
+                                self._zero_move_streak += 1
+                            else:
+                                self._zero_move_streak = 0
+
+                            if self._zero_move_streak >= 3:
+                                self.get_logger().error(
+                                    'VEHICLE NOT MOVING: %d consecutive goals '
+                                    'in different directions produced zero '
+                                    'movement. This is not a frontier problem '
+                                    '- the vehicle is wedged, disabled, or its '
+                                    'commands are not reaching the wheels. '
+                                    'Stopping rather than blacklisting the '
+                                    'whole map on false evidence. Check that '
+                                    'it is upright and has clearance, then '
+                                    'restart.' % self._zero_move_streak)
+                                self._cancel_goal()
+                                self.done = True
+                                return
+
+                            self.get_logger().warn(
+                                'Goal STALLED: %.2fm of movement in %.0fs.'
+                                % (moved, self.stall_timeout))
+                            self._cancel_goal()
+                            self._request_recovery('stalled', moved)
+                            self._progress_xy = None; self._last_progress = None
+                            return
+
+                if (now - self.goal_start).nanoseconds * 1e-9 > self.goal_timeout:
+                    self.get_logger().warn('Goal timeout — replanning.')
+                    self._record_failure('timeout'); self._cancel_goal()
+                    self._progress_xy = None; self._last_progress = None
+            return
+        rc = self.robot_cell()
+        if rc is None: return
+        rx, ry, rwx, rwy = rc; occ = self._inflate(self.grid >= self.occ_th)
+        if len(self.explored_goals) > 5 and self.last_info is not None and self.last_info > 0:
+            inc = (self.count_info(occ) - self.last_info) / self.last_info
+            if inc < self.info_gain_th:
+                self.no_gain += 1
+                if self.no_gain >= self.num_no_gain:
+                    self.get_logger().info(
+                        'EXPLORATION COMPLETE: no information gain after %d attempts. '
+                        '%d goals published, %d frontiers blacklisted as unreachable. '
+                        'Stopping - save the map now.'
+                        % (self.num_no_gain, self.goals_published, len(self.blacklist)))
+                    self.done = True; return
+            else: self.no_gain = 0
+        frontiers = self.detect_frontiers(occ)
+        if not frontiers:
+            self.last_info = self.count_info(occ); self.consecutive_fail += 1
+            if self.goals_published >= 2 and self.consecutive_fail >= 10:
+                self.get_logger().info(
+                    'EXPLORATION COMPLETE: no frontiers left. %d goals published, '
+                    '%d blacklisted. Stopping.'
+                    % (self.goals_published, len(self.blacklist)))
+                self.done = True
+            return
+        cost_field = self.dijkstra(occ, (rx, ry)); scored = []
+        for fr in frontiers:
+            s, w = self.score(fr, cost_field, rwx, rwy)
+            if s != float('-inf') and w is not None: scored.append((s, w))
+        if not scored:
+            self.get_logger().info(f'{len(frontiers)} frontiers, none reachable this tick.'); return
+        scored.sort(key=lambda t: t[0], reverse=True); best_s, (gx, gy) = scored[0]
+        mag = math.hypot(gx - rwx, gy - rwy)
+        if mag > 0.1: self.expl_dir = ((gx - rwx) / mag, (gy - rwy) / mag)
+        # Bounded: an unbounded history drives every score to zero via the
+        # anti-revisit fade, at which point sort() ties and the same frontier
+        # is chosen forever.
+        self.explored_goals.append((gx, gy))
+        if len(self.explored_goals) > self.explored_memory:
+            self.explored_goals = self.explored_goals[-self.explored_memory:]
+        self.last_info = self.count_info(occ); self.consecutive_fail = 0
+        approach = math.atan2(gy - rwy, gx - rwx)
+        gcx, gcy = self.world_to_cell(gx, gy)
+        goal_yaw = self.free_direction_at(occ, gcx, gcy, approach)
+        if abs((goal_yaw - approach + math.pi) % (2 * math.pi) - math.pi) > 0.4:
+            self.get_logger().info(
+                'Goal yaw set to %.0f deg from local free space (approach '
+                'bearing was %.0f) - looks like a passage.'
+                % (math.degrees(goal_yaw), math.degrees(approach)))
+        self.send_goal(gx, gy, goal_yaw, best_s)
+
+    def free_direction_at(self, occ, gx_cell, gy_cell, fallback_yaw,
+                          radius=14):
+        """Which way does open space run at this goal?
+
+        Frontier goals are normally given a yaw pointing AT the frontier from
+        wherever the robot happens to be. Through an aperture that is exactly
+        wrong: an archway has to be entered along its axis, and Nav2's
+        yaw_goal_tolerance is 0.60 rad, so an arbitrary arrival heading leaves
+        the vehicle facing a wall.
+
+        Observed directly: navigate_to((0, -13)) with no yaw aborted after
+        49.6s having moved 1.08m, commanding rotation while stationary. The
+        same goal with yaw=-1.57 succeeded, and the 12m run through the tunnel
+        then took 12.6s.
+
+        This casts rays outward from the goal cell across the occupancy grid
+        and returns the direction with the most free space, which through a
+        passage is the passage axis. In open ground the result is ambiguous
+        and it falls back to the approach bearing, which is fine there.
+        """
+        h, w = occ.shape
+        best_dir, best_reach = None, 0.0
+        reaches = []
+        n_dirs = 16
+        for k in range(n_dirs):
+            a = 2.0 * math.pi * k / n_dirs
+            dx, dy = math.cos(a), math.sin(a)
+            reach = 0
+            for step in range(1, radius + 1):
+                nx = int(round(gx_cell + dx * step))
+                ny = int(round(gy_cell + dy * step))
+                if not (0 <= nx < w and 0 <= ny < h) or occ[ny, nx]:
+                    break
+                reach = step
+            reaches.append((reach, a))
+            if reach > best_reach:
+                best_reach, best_dir = reach, a
+
+        # Ambiguous: several directions equally open means open ground, not a
+        # passage. Use the approach bearing rather than an arbitrary pick.
+        # A genuine passage is open in ONE direction and its opposite, and
+        # closed to the sides. Following a wall looks open along the wall too,
+        # which is why this also requires the reverse direction to be open:
+        # a corridor has two ends, a wall has one side.
+        opposite = (best_dir + math.pi) % (2.0 * math.pi)
+        opp_reach = 0
+        for r, a in reaches:
+            d = abs((a - opposite + math.pi) % (2.0 * math.pi) - math.pi)
+            if d < 0.5:
+                opp_reach = max(opp_reach, r)
+
+        wide_open = sum(1 for r, _ in reaches if r >= best_reach - 1)
+        if (best_dir is None or best_reach < 4 or wide_open > 4
+                or opp_reach < best_reach * 0.5):
+            return fallback_yaw
+        return best_dir
+
+    def send_goal(self, x, y, yaw, s):
+        if not self.nav.wait_for_server(timeout_sec=2.0):
+            self.get_logger().warn('Nav2 action server not available yet.'); return
+        goal = NavigateToPose.Goal(); ps = PoseStamped()
+        ps.header.frame_id = self.global_frame; ps.header.stamp = self.get_clock().now().to_msg()
+        ps.pose.position.x = x; ps.pose.position.y = y; ps.pose.orientation = yaw_to_quat(yaw)
+        goal.pose = ps; self.busy = True; self.goal_start = self.get_clock().now(); self.goals_published += 1
+        self.current_goal = (x, y)
+        self._progress_xy = None; self._last_progress = None
+        self.get_logger().info(f'Goal #{self.goals_published}: ({x:.2f}, {y:.2f}) score={s:.4f}')
+        self.nav.send_goal_async(goal).add_done_callback(self._goal_response)
+
+    def _request_recovery(self, reason, moved):
+        """Hand a positional failure to something that can reposition.
+
+        A stalled goal is usually not a bad frontier: the vehicle is somewhere
+        it cannot drive out of, and every other frontier fails identically.
+        Blacklisting here condemns good frontiers on false evidence.
+        """
+        rc = self.robot_cell()
+        if rc is None:
+            return
+        msg = RecoveryRequest()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.reason = reason
+        msg.x, msg.y = float(rc[2]), float(rc[3])
+        msg.yaw = 0.0
+        gx, gy = self.current_goal if self.current_goal else (0.0, 0.0)
+        msg.goal_x, msg.goal_y = float(gx), float(gy)
+        msg.diagnosis = self.last_diagnosis
+        msg.scan_summary = ''
+        msg.moved_distance = float(moved)
+        msg.stalled_seconds = float(self.stall_timeout)
+        self.recovering = True
+        self.recovery_pub.publish(msg)
+        self.get_logger().warn(
+            'Requested recovery for the goal at (%.2f, %.2f). Paused.'
+            % (gx, gy))
+
+    def _on_recovery_result(self, msg):
+        self.recovering = False
+        self._zero_move_streak = 0
+        self._progress_xy = None
+        self._last_progress = None
+        if msg.freed:
+            self.get_logger().info(
+                'Recovery freed the vehicle (%.2fm, %d calls): %s'
+                % (msg.moved_distance, msg.tool_calls_used, msg.account))
+            # Only blacklist if the agent - which has just been there and
+            # looked - says the goal is not worth another attempt.
+            if not msg.goal_worth_retrying:
+                self._record_failure('recovery advised against retrying')
+        else:
+            self.get_logger().error(
+                'Recovery did NOT free the vehicle (%.2fm): %s'
+                % (msg.moved_distance, msg.account))
+            self._record_failure('unrecoverable')
+
+    def _record_failure(self, why):
+        if self.current_goal is None:
+            return
+        gx, gy = self.current_goal
+        for i, (bx, by, n) in enumerate(self.blacklist):
+            if math.hypot(gx - bx, gy - by) < self.blacklist_radius:
+                self.blacklist[i] = (bx, by, n + 1)
+                if n + 1 >= self.max_goal_failures:
+                    self.get_logger().warn(
+                        'BLACKLISTED (%.2f, %.2f) after %d failures (%s). '
+                        'It will not be selected again.' % (bx, by, n + 1, why))
+                return
+        self.blacklist.append((gx, gy, 1))
+
+    def _reset_streak(self):
+        self._zero_move_streak = 0
+
+    def _record_success(self):
+        if self.current_goal is None:
+            return
+        gx, gy = self.current_goal
+        self.blacklist = [b for b in self.blacklist
+                          if math.hypot(gx - b[0], gy - b[1]) >= self.blacklist_radius]
+
+    def _goal_response(self, fut):
+        gh = fut.result()
+        if not gh.accepted:
+            self.get_logger().warn('Goal rejected by Nav2.'); self.busy = False; return
+        self._goal_handle = gh; gh.get_result_async().add_done_callback(self._goal_result)
+
+    def _goal_result(self, fut):
+        st = fut.result().status
+        msg = {GoalStatus.STATUS_SUCCEEDED: 'reached', GoalStatus.STATUS_ABORTED: 'aborted',
+               GoalStatus.STATUS_CANCELED: 'cancelled'}.get(st, str(st))
+        if st == GoalStatus.STATUS_SUCCEEDED:
+            self._zero_move_streak = 0
+            self._record_success()
+        else:
+            self._record_failure(msg)
+        self.get_logger().info(
+            f'Goal {msg}; selecting next frontier. '
+            f'({len(self.blacklist)} blacklisted)')
+        self.busy = False; self._goal_handle = None
+
+    def _cancel_goal(self):
+        if self._goal_handle is not None: self._goal_handle.cancel_goal_async()
+        self.busy = False; self._goal_handle = None
+
+
+def main(args=None):
+    rclpy.init(args=args); node = FrontierExplorer()
+    try: rclpy.spin(node)
+    except KeyboardInterrupt: pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok(): rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
