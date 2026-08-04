@@ -212,6 +212,8 @@ class Agent:
             "get_pose": lambda: self.tools.get_pose(),
             "get_scan_summary": lambda: self.tools.get_scan_summary(),
             "look": lambda: self.tools.look(args.get("question")),
+            "check_width": lambda: self.tools.check_width(args.get("direction_deg", 0.0)),
+            "check_turn_around": lambda: self.tools.check_turn_around(),
             "check_map_against_sensors": lambda: self.tools.check_map_against_sensors(),
             "check_attitude": lambda: self.tools.check_attitude()[1],
             "list_landmarks": lambda: self.tools.list_landmarks(),
@@ -346,6 +348,48 @@ class Agent:
             for call in calls:
                 print("[tool ] %s(%s)" % (call.name, call.args))
                 sig = (call.name, json.dumps(call.args, sort_keys=True))
+
+                # Exact-match blocking teaches evasion rather than
+                # reconsideration: a model was observed retrying a failed
+                # navigate_to(0, -20) as navigate_to(0, -19.95) and saying so.
+                # Numeric arguments within a tolerance count as the same call.
+                near_dupe = None
+                for fname, fargs in failed_calls:
+                    if fname != call.name:
+                        continue
+                    try:
+                        prev = json.loads(fargs)
+                    except Exception:
+                        continue
+                    if set(prev) != set(call.args):
+                        continue
+                    same = True
+                    for k, v in call.args.items():
+                        pv = prev.get(k)
+                        if isinstance(v, (int, float)) and isinstance(pv, (int, float)):
+                            if abs(float(v) - float(pv)) > 0.5:
+                                same = False
+                                break
+                        elif v != pv:
+                            same = False
+                            break
+                    if same:
+                        near_dupe = prev
+                        break
+
+                if near_dupe is not None:
+                    out = ("BLOCKED BY HARNESS: this is effectively the same "
+                           "call that already failed (%s). Nudging the numbers "
+                           "does not change the geometry that caused the "
+                           "failure. Read the earlier DIAGNOSIS and either "
+                           "reposition the vehicle first, or use a genuinely "
+                           "different approach - a different tool, or an "
+                           "intermediate goal at least a couple of metres "
+                           "away." % near_dupe)
+                    print("[obs  ] %s\n" % out)
+                    results.append((call, out))
+                    continue
+
                 if sig in failed_calls:
                     out = ("BLOCKED BY HARNESS: this exact call already failed "
                            "in this task and was not retried. Read the earlier "
