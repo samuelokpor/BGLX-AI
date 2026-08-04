@@ -41,21 +41,12 @@ class FrontierExplorer(Node):
         p('nav_action', 'navigate_to_pose'); p('min_frontier_perimeter', 0.5)
         p('occupancy_threshold', 65); p('safe_distance', 3.0); p('info_gain_threshold', 0.03)
         p('num_no_gain_attempts', 2); p('goal_timeout', 15.0); p('unknown_traversal_penalty', 3.0)
-        p('blacklist_radius', 2.5); p('max_goal_failures', 3); p('explored_memory', 20)
         p('inflation_radius', 0.25); p('info_radius', 0.6); p('period', 1.0)
         g = lambda n: self.get_parameter(n).value
         self.map_topic = g('map_topic'); self.global_frame = g('global_frame'); self.base_frame = g('robot_base_frame')
         self.min_perim = g('min_frontier_perimeter'); self.occ_th = g('occupancy_threshold')
         self.safe_dist = g('safe_distance'); self.info_gain_th = g('info_gain_threshold')
         self.num_no_gain = g('num_no_gain_attempts'); self.goal_timeout = g('goal_timeout')
-        self.blacklist_radius = g('blacklist_radius'); self.max_goal_failures = int(g('max_goal_failures'))
-        self.explored_memory = int(g('explored_memory'))
-        # (x, y, consecutive_failures). A frontier Nav2 cannot reach must be
-        # excluded, or it is re-selected forever: this explorer spent 17 hours
-        # retrying one goal beyond a 3.5m gate arch.
-        self.blacklist = []
-        self.current_goal = None
-        self.done = False
         self.unk_pen = g('unknown_traversal_penalty'); self.infl = g('inflation_radius'); self.info_radius = g('info_radius')
         self.grid = None; self.res = None; self.ox = self.oy = 0.0
         self.explored_goals = []; self.expl_dir = (0.0, 0.0)
@@ -156,11 +147,7 @@ class FrontierExplorer(Node):
         if not np.isfinite(pc): return float('-inf'), None
         path_cost = pc * self.res
         info_gain = min(size / (self.min_perim / self.res * 10.0), 1.0)
-        wx, wy = self.cell_to_world(cx, cy)
-        for bx, by, n in self.blacklist:
-            if n >= self.max_goal_failures and math.hypot(wx - bx, wy - by) < self.blacklist_radius:
-                return float('-inf'), None
-        dxu, dyu = wx - rwx, wy - rwy; mag = math.hypot(dxu, dyu)
+        wx, wy = self.cell_to_world(cx, cy); dxu, dyu = wx - rwx, wy - rwy; mag = math.hypot(dxu, dyu)
         momentum = 0.0
         if mag > 0.1 and (self.expl_dir[0] or self.expl_dir[1]):
             momentum = max(0.0, (self.expl_dir[0] * dxu + self.expl_dir[1] * dyu) / mag)
@@ -174,13 +161,10 @@ class FrontierExplorer(Node):
         return int(np.sum(self.grid == 0) + np.sum(occ))
 
     def tick(self):
-        if self.done:
-            return
         if self.grid is None or self.busy:
             if self.busy and self.goal_start is not None and \
                (self.get_clock().now() - self.goal_start).nanoseconds * 1e-9 > self.goal_timeout:
-                self.get_logger().warn('Goal timeout — replanning.')
-                self._record_failure('timeout'); self._cancel_goal()
+                self.get_logger().warn('Goal timeout — replanning.'); self._cancel_goal()
             return
         rc = self.robot_cell()
         if rc is None: return
@@ -190,22 +174,13 @@ class FrontierExplorer(Node):
             if inc < self.info_gain_th:
                 self.no_gain += 1
                 if self.no_gain >= self.num_no_gain:
-                    self.get_logger().info(
-                        'EXPLORATION COMPLETE: no information gain after %d attempts. '
-                        '%d goals published, %d frontiers blacklisted as unreachable. '
-                        'Stopping - save the map now.'
-                        % (self.num_no_gain, self.goals_published, len(self.blacklist)))
-                    self.done = True; return
+                    self.get_logger().info('No information gain — exploration complete.'); self.no_gain = 0; return
             else: self.no_gain = 0
         frontiers = self.detect_frontiers(occ)
         if not frontiers:
             self.last_info = self.count_info(occ); self.consecutive_fail += 1
             if self.goals_published >= 2 and self.consecutive_fail >= 10:
-                self.get_logger().info(
-                    'EXPLORATION COMPLETE: no frontiers left. %d goals published, '
-                    '%d blacklisted. Stopping.'
-                    % (self.goals_published, len(self.blacklist)))
-                self.done = True
+                self.get_logger().info('No frontiers left — exploration complete.')
             return
         cost_field = self.dijkstra(occ, (rx, ry)); scored = []
         for fr in frontiers:
@@ -216,13 +191,7 @@ class FrontierExplorer(Node):
         scored.sort(key=lambda t: t[0], reverse=True); best_s, (gx, gy) = scored[0]
         mag = math.hypot(gx - rwx, gy - rwy)
         if mag > 0.1: self.expl_dir = ((gx - rwx) / mag, (gy - rwy) / mag)
-        # Bounded: an unbounded history drives every score to zero via the
-        # anti-revisit fade, at which point sort() ties and the same frontier
-        # is chosen forever.
-        self.explored_goals.append((gx, gy))
-        if len(self.explored_goals) > self.explored_memory:
-            self.explored_goals = self.explored_goals[-self.explored_memory:]
-        self.last_info = self.count_info(occ); self.consecutive_fail = 0
+        self.explored_goals.append((gx, gy)); self.last_info = self.count_info(occ); self.consecutive_fail = 0
         self.send_goal(gx, gy, math.atan2(gy - rwy, gx - rwx), best_s)
 
     def send_goal(self, x, y, yaw, s):
@@ -232,30 +201,8 @@ class FrontierExplorer(Node):
         ps.header.frame_id = self.global_frame; ps.header.stamp = self.get_clock().now().to_msg()
         ps.pose.position.x = x; ps.pose.position.y = y; ps.pose.orientation = yaw_to_quat(yaw)
         goal.pose = ps; self.busy = True; self.goal_start = self.get_clock().now(); self.goals_published += 1
-        self.current_goal = (x, y)
         self.get_logger().info(f'Goal #{self.goals_published}: ({x:.2f}, {y:.2f}) score={s:.4f}')
         self.nav.send_goal_async(goal).add_done_callback(self._goal_response)
-
-    def _record_failure(self, why):
-        if self.current_goal is None:
-            return
-        gx, gy = self.current_goal
-        for i, (bx, by, n) in enumerate(self.blacklist):
-            if math.hypot(gx - bx, gy - by) < self.blacklist_radius:
-                self.blacklist[i] = (bx, by, n + 1)
-                if n + 1 >= self.max_goal_failures:
-                    self.get_logger().warn(
-                        'BLACKLISTED (%.2f, %.2f) after %d failures (%s). '
-                        'It will not be selected again.' % (bx, by, n + 1, why))
-                return
-        self.blacklist.append((gx, gy, 1))
-
-    def _record_success(self):
-        if self.current_goal is None:
-            return
-        gx, gy = self.current_goal
-        self.blacklist = [b for b in self.blacklist
-                          if math.hypot(gx - b[0], gy - b[1]) >= self.blacklist_radius]
 
     def _goal_response(self, fut):
         gh = fut.result()
@@ -267,14 +214,7 @@ class FrontierExplorer(Node):
         st = fut.result().status
         msg = {GoalStatus.STATUS_SUCCEEDED: 'reached', GoalStatus.STATUS_ABORTED: 'aborted',
                GoalStatus.STATUS_CANCELED: 'cancelled'}.get(st, str(st))
-        if st == GoalStatus.STATUS_SUCCEEDED:
-            self._record_success()
-        else:
-            self._record_failure(msg)
-        self.get_logger().info(
-            f'Goal {msg}; selecting next frontier. '
-            f'({len(self.blacklist)} blacklisted)')
-        self.busy = False; self._goal_handle = None
+        self.get_logger().info(f'Goal {msg}; selecting next frontier.'); self.busy = False; self._goal_handle = None
 
     def _cancel_goal(self):
         if self._goal_handle is not None: self._goal_handle.cancel_goal_async()

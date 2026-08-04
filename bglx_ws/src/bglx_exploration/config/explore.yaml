@@ -10,7 +10,7 @@ frontier_explorer:
     safe_distance: 3.0               # m, anti-revisit fade radius (your dimos value)
     info_gain_threshold: 0.005        # min fractional map-info increase to keep going
     num_no_gain_attempts: 2          # consecutive no-gain ticks -> stop
-    goal_timeout: 90.0               # long routes through the gate arch need it
+    goal_timeout: 45.0               # s per Nav2 goal before moving on
     unknown_traversal_penalty: 3.0   # Dijkstra cost multiplier for unknown cells
     inflation_radius: 0.25           # m, obstacle inflation for planning
     info_radius: 0.6
