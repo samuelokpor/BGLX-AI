@@ -349,6 +349,61 @@ class RobotTools(Node):
         return self._last_failure
 
     # --- navigation --------------------------------------------------------
+    def _goal_is_blocked(self, x, y):
+        """Return a diagnosis if (x, y) is not free space, else None."""
+        with self._lock:
+            grid = self._static_grid
+            info = self._static_info
+        if grid is None or info is None:
+            return None                     # no map to check against
+
+        res = info.resolution
+        ox = info.origin.position.x
+        oy = info.origin.position.y
+        cx = int((x - ox) / res)
+        cy = int((y - oy) / res)
+        if not (0 <= cx < info.width and 0 <= cy < info.height):
+            return None                     # bounds check already covers this
+
+        v = grid[cy * info.width + cx]
+        if v < 0:
+            return ("navigate_to refused: the goal (%.2f, %.2f) is in "
+                    "UNEXPLORED space - the map has no information there, so "
+                    "no path can be planned to it. Pick a goal inside known "
+                    "ground, or approach in shorter stages so the map fills "
+                    "in as the vehicle advances." % (x, y))
+        if v >= 65:
+            # How far back along the bearing is open ground?
+            import math as _m
+            pose = self._pose()
+            free_at = None
+            if pose is not None:
+                dx, dy = x - pose[0], y - pose[1]
+                dist = _m.hypot(dx, dy)
+                if dist > 0.1:
+                    ux, uy = dx / dist, dy / dist
+                    step = res * 4
+                    d = dist
+                    while d > 0.5:
+                        tx, ty = pose[0] + ux * d, pose[1] + uy * d
+                        tcx = int((tx - ox) / res)
+                        tcy = int((ty - oy) / res)
+                        if (0 <= tcx < info.width and 0 <= tcy < info.height
+                                and 0 <= grid[tcy * info.width + tcx] < 25):
+                            free_at = d
+                            break
+                        d -= step
+            note = ""
+            if free_at is not None:
+                note = (" The furthest open ground on that bearing is about "
+                        "%.1fm away." % free_at)
+            return ("navigate_to refused: the goal (%.2f, %.2f) is INSIDE an "
+                    "obstacle according to the map - a wall or a building. "
+                    "Nav2 would drive up to it and then fail.%s Choose a "
+                    "reachable goal, or route around the obstruction rather "
+                    "than through it." % (x, y, note))
+        return None
+
     def navigate_to(self, x, y, yaw=None):
         """Send a Nav2 goal, then report in words what happened."""
         upright, att = self.check_attitude()
@@ -374,6 +429,21 @@ class RobotTools(Node):
                        % (float(x), float(y), bx0, by0, bx1, by1))
                 self._last_failure = msg
                 return msg
+
+        # Is the goal cell somewhere the vehicle could actually stand?
+        #
+        # Being inside the map is not the same as being in free space. A
+        # relative move computed from a heading lands wherever the arithmetic
+        # says, and if that is inside a building Nav2 will spend the full
+        # timeout getting as close as it can before aborting - 60 seconds to
+        # learn something the costmap knew immediately. Observed: a request to
+        # go 10m ahead put the goal inside a wall; Nav2 drove 9.74m, stalled
+        # against the building, and reported an approach-angle problem.
+        blocked = self._goal_is_blocked(float(x), float(y))
+        if blocked:
+            self._last_failure = blocked
+            return blocked
+
 
         if not self.nav_client.wait_for_server(timeout_sec=5.0):
             return ("navigate_to failed: the navigate_to_pose action server is "
@@ -631,12 +701,64 @@ class RobotTools(Node):
         if upright is False:
             return "drive refused. " + att
 
+        # drive() bypasses Nav2 entirely: no global plan, no costmap, no
+        # collision checking. That is the point - it is the escape hatch when
+        # the planner cannot help. But an escape hatch with no floor is a
+        # trapdoor: the agent, frustrated by repeated Nav2 stalls, used this
+        # to push the vehicle into a wall twice, each time travelling 1.5m of
+        # a commanded 5m and grinding for the remaining seconds.
+        #
+        # So: check the direction of travel before moving, and keep checking
+        # while moving. This is not obstacle avoidance - it will not steer
+        # around anything - it simply refuses to drive into what it can see.
+        STOP_DIST = 1.6          # m, roughly the forward footprint plus margin
+        direction = 0.0 if float(linear_x) >= 0 else 180.0
+        summary = summarise_scan(self._scan)
+        if summary:
+            if direction == 0.0:
+                near = min(summary.get("front", 99.0),
+                           summary.get("front-left", 99.0),
+                           summary.get("front-right", 99.0))
+                where = "ahead"
+            else:
+                near = min(summary.get("rear", 99.0),
+                           summary.get("rear-left", 99.0),
+                           summary.get("rear-right", 99.0))
+                where = "behind"
+            if near < STOP_DIST:
+                return ("drive REFUSED: only %.2fm of clearance %s and this "
+                        "tool has no obstacle avoidance whatsoever - it would "
+                        "drive straight into it. %.2fm is needed. Use "
+                        "navigate_relative, which plans around obstacles, or "
+                        "move somewhere with more room first."
+                        % (near, where, STOP_DIST))
+
         before = self._pose()
         msg = Twist()
         msg.linear.x = linear_x
         msg.angular.z = angular_z
         t0 = time.time()
+        aborted = None
         while time.time() - t0 < duration:
+            # Keep watching. A pre-flight check is not enough: the vehicle can
+            # close 1.6m in three seconds, and grinding against a wall for the
+            # remainder of the commanded duration is how a 5m command produced
+            # 1.5m of travel and a collision.
+            summary = summarise_scan(self._scan)
+            if summary:
+                if float(linear_x) >= 0:
+                    near = min(summary.get("front", 99.0),
+                               summary.get("front-left", 99.0),
+                               summary.get("front-right", 99.0))
+                    where = "ahead"
+                else:
+                    near = min(summary.get("rear", 99.0),
+                               summary.get("rear-left", 99.0),
+                               summary.get("rear-right", 99.0))
+                    where = "behind"
+                if near < STOP_DIST:
+                    aborted = (near, where, time.time() - t0)
+                    break
             self.cmd_pub.publish(msg)
             time.sleep(0.05)
         self.cmd_pub.publish(Twist())
@@ -655,6 +777,13 @@ class RobotTools(Node):
                 out += (" WARNING: actual displacement differs from commanded "
                         "by %.2fm - the robot may have been obstructed or "
                         "slipped." % abs(moved - intended))
+        if aborted is not None:
+            near, where, elapsed = aborted
+            out += (" STOPPED EARLY after %.1fs: an obstacle came within "
+                    "%.2fm %s. drive() has no obstacle avoidance, so it halts "
+                    "rather than continuing into it. Do NOT simply retry - use "
+                    "navigate_relative, which plans around obstacles."
+                    % (elapsed, near, where))
         out += (" Note: drive() moves speed x duration metres. To travel a "
                 "specific distance, compute duration = distance / speed, and "
                 "verify the result before reporting completion.")

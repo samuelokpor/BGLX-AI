@@ -16,3 +16,4 @@ lidar_ws/
 
 # saved maps: large binaries, regenerate with the explorer
 maps/
+*.bak*

@@ -25,6 +25,7 @@
 
   <!-- NEW: ros2_control hardware + gazebo_ros2_control plugin -->
   <xacro:include filename="$(find etrike_description)/urdf/control/etrike_ros2_control.xacro"/>
+  <xacro:include filename="$(find etrike_description)/urdf/components/perimeter_sensors.xacro"/>
 
   <!-- ============================================================== -->
   <!-- INSTANTIATE COMPONENTS (parent links must exist before children)-->
@@ -37,4 +38,5 @@
   <xacro:rear_drive parent="base_link"/>
   <xacro:sensors parent="sensor_mount_plate"/>
 
+  <xacro:perimeter_sensors parent="base_link"/>
 </robot>

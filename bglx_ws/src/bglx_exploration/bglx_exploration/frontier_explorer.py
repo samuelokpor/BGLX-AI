@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """BGLX frontier exploration — info-gain per A*-path-cost scoring.
 
-Faithful ROS 2 / Nav2 port of the DIMOS WavefrontFrontierExplorer
-(dimensionalOS/dimos PR #2830). Per frontier:
-
-    score = info_gain / (1 + path_cost) * (1 + 0.5 * momentum)   (anti-revisit fade)
-
-- Frontier cell = UNKNOWN, adjacent to >=1 FREE, adjacent to NO occupied cell.
-- path_cost = real travel distance from the robot over the inflated map via a
-  single Dijkstra (occupied blocked, unknown traversable-but-penalized) — same
-  ranking as per-frontier A*, one pass.
-- Unreachable (cost inf) -> excluded. momentum = bearing alignment with last dir.
-- Self-terminates on sustained no information gain.
 Nav2 drives via NavigateToPose; this node only selects goals.
+
+CENTROID-DEADLOCK FIX (2026-08):
+Symptom: explorer re-sent the SAME goal (~0.4 m away), Nav2 reported it
+"reached" instantly (already inside xy_goal_tolerance), robot never moved,
+map never grew, node declared "no information gain — complete".
+Cause: score = info_gain / (1 + path_cost) always favours the NEAREST
+frontier, and the goal was the frontier *centroid*, which for the blob
+wrapping the robot lands right next to it. The old anti-revisit only scaled
+score down; it never excluded a goal, so a single frontier was re-picked
+forever.
+Fix (goal selection only; scoring maths unchanged):
+  1. min_goal_distance — reject goals so close Nav2 auto-succeeds without
+     moving. Forces travel; pushes the sensor horizon out so new frontiers
+     appear.
+  2. revisit_radius — HARD-exclude goals near ones already sent.
+  3. Graded fallback — far+unvisited, then far-only, then any reachable —
+     so it never wedges or completes prematurely.
 """
 import math
 from collections import deque
@@ -42,12 +48,16 @@ class FrontierExplorer(Node):
         p('occupancy_threshold', 65); p('safe_distance', 3.0); p('info_gain_threshold', 0.03)
         p('num_no_gain_attempts', 2); p('goal_timeout', 15.0); p('unknown_traversal_penalty', 3.0)
         p('inflation_radius', 0.25); p('info_radius', 0.6); p('period', 1.0)
+        # --- centroid-deadlock fix params ---
+        p('min_goal_distance', 1.2)   # >= goal_checker xy tolerance (0.30 m)
+        p('revisit_radius', 1.5)      # hard-exclude goals near ones already sent
         g = lambda n: self.get_parameter(n).value
         self.map_topic = g('map_topic'); self.global_frame = g('global_frame'); self.base_frame = g('robot_base_frame')
         self.min_perim = g('min_frontier_perimeter'); self.occ_th = g('occupancy_threshold')
         self.safe_dist = g('safe_distance'); self.info_gain_th = g('info_gain_threshold')
         self.num_no_gain = g('num_no_gain_attempts'); self.goal_timeout = g('goal_timeout')
         self.unk_pen = g('unknown_traversal_penalty'); self.infl = g('inflation_radius'); self.info_radius = g('info_radius')
+        self.min_goal_dist = g('min_goal_distance'); self.revisit_radius = g('revisit_radius')
         self.grid = None; self.res = None; self.ox = self.oy = 0.0
         self.explored_goals = []; self.expl_dir = (0.0, 0.0)
         self.last_info = None; self.no_gain = 0
@@ -160,6 +170,24 @@ class FrontierExplorer(Node):
     def count_info(self, occ):
         return int(np.sum(self.grid == 0) + np.sum(occ))
 
+    def _candidates(self, frontiers, cost_field, rwx, rwy, min_dist, use_revisit):
+        """Keep goals >= min_dist from the robot and (when use_revisit) not
+        within revisit_radius of a goal already sent. Returns (score,(gx,gy))."""
+        out = []
+        for fr in frontiers:
+            s, w = self.score(fr, cost_field, rwx, rwy)
+            if s == float('-inf') or w is None:
+                continue
+            gx, gy = w
+            if math.hypot(gx - rwx, gy - rwy) < min_dist:
+                continue
+            if use_revisit and any(
+                    math.hypot(gx - ex, gy - ey) < self.revisit_radius
+                    for ex, ey in self.explored_goals):
+                continue
+            out.append((s, (gx, gy)))
+        return out
+
     def tick(self):
         if self.grid is None or self.busy:
             if self.busy and self.goal_start is not None and \
@@ -182,10 +210,15 @@ class FrontierExplorer(Node):
             if self.goals_published >= 2 and self.consecutive_fail >= 10:
                 self.get_logger().info('No frontiers left — exploration complete.')
             return
-        cost_field = self.dijkstra(occ, (rx, ry)); scored = []
-        for fr in frontiers:
-            s, w = self.score(fr, cost_field, rwx, rwy)
-            if s != float('-inf') and w is not None: scored.append((s, w))
+        cost_field = self.dijkstra(occ, (rx, ry))
+        # Graded selection (centroid-deadlock fix): far+unvisited, then
+        # far-only, then any reachable. Robot is never handed a goal it is
+        # already standing on.
+        scored = self._candidates(frontiers, cost_field, rwx, rwy, self.min_goal_dist, True)
+        if not scored:
+            scored = self._candidates(frontiers, cost_field, rwx, rwy, self.min_goal_dist, False)
+        if not scored:
+            scored = self._candidates(frontiers, cost_field, rwx, rwy, 0.0, False)
         if not scored:
             self.get_logger().info(f'{len(frontiers)} frontiers, none reachable this tick.'); return
         scored.sort(key=lambda t: t[0], reverse=True); best_s, (gx, gy) = scored[0]
@@ -199,7 +232,8 @@ class FrontierExplorer(Node):
             self.get_logger().warn('Nav2 action server not available yet.'); return
         goal = NavigateToPose.Goal(); ps = PoseStamped()
         ps.header.frame_id = self.global_frame; ps.header.stamp = self.get_clock().now().to_msg()
-        ps.pose.position.x = x; ps.pose.position.y = y; ps.pose.orientation = yaw_to_quat(yaw)
+        ps.pose.position.x = float(x); ps.pose.position.y = float(y)   # numpy -> float
+        ps.pose.orientation = yaw_to_quat(yaw)
         goal.pose = ps; self.busy = True; self.goal_start = self.get_clock().now(); self.goals_published += 1
         self.get_logger().info(f'Goal #{self.goals_published}: ({x:.2f}, {y:.2f}) score={s:.4f}')
         self.nav.send_goal_async(goal).add_done_callback(self._goal_response)

@@ -38,7 +38,7 @@ class CmdVelLimiter(Node):
 
         # --- parameters ---
         self.declare_parameter('wheelbase', 1.33)              # m
-        self.declare_parameter('max_steering_angle', 0.6)      # rad (~34 deg)
+        self.declare_parameter('max_steering_angle', 1.047)    # rad (60 deg) - keep in sync with front_fork.xacro
         self.declare_parameter('max_lateral_accel', 1.5)       # m/s^2 (rollover cap)
         self.declare_parameter('max_linear_vel', 2.78)         # m/s (~10 km/h)
         self.declare_parameter('min_speed_for_steer', 0.05)    # m/s
