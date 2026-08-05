@@ -11,107 +11,83 @@ autonomy is tractable today rather than aspirational.
 
 ![BGLX autonomous e-trike in the campus world](docs/trike.png)
 
-```
-task> patrol between the loading dock and the north entrance until I stop you
-
-[agent] Checking where I am before planning a route.
-[tool ] get_pose()
-[obs ]  Position (2.86, 0.01) in map, heading 0.3 deg. Inside the mapped area.
-[tool ] navigate_to_landmark({'name': 'loading_dock'})
-[obs ]  Arrived at (7.40, 1.22), 0.19m from the goal, in 11.3s.
-```
-
 ## What's different
 
-Two things, and the second matters more.
+**Natural-language operation.** Operators describe outcomes, not coordinates.
+BGLX takes the task in language and works out the goals itself.
 
-**Natural-language operation.** Most delivery robots are commanded in
-coordinates or fixed waypoint lists, which means every new task is a
-configuration job for an engineer. BGLX takes the task in language and works
-out the goals itself. Operators describe outcomes, not coordinates.
+**Machine-legible failure.** Nav2 reports `ABORTED` — a status code no agent
+can act on. BGLX translates robot state into a diagnosis an operator or an
+agent can reason about, so the fleet gets itself unstuck instead of waiting
+for a human.
 
-**Machine-legible failure.** This is the harder problem and the real moat.
-Nav2 reports `ABORTED` — a status code no agent can act on. A robot that
-fails opaquely needs a human to interpret it, which destroys the economics of
-an autonomous fleet. BGLX translates robot state into diagnosis:
-
-> *"Aborted 2.3 m from the goal. A path existed but the robot did not move
-> for 6.4 s — the local planner found no feasible trajectory. Given the
-> 1.94 m turning circle this usually means the approach angle is too tight.
-> Back off and re-approach from further out."*
-
-That paragraph is the difference between a robot that gets stuck and a robot
-that gets itself unstuck. It accumulates: every field failure understood
-becomes a diagnosis the fleet never needs a human for again.
-
-**Inference runs locally.** A campus vehicle cannot depend on reaching a
-cloud endpoint. The agent runs on a local model on the vehicle's own compute,
-with cloud backends available but not required.
+**Inference runs locally.** The agent runs on the vehicle's own compute, with
+cloud backends available but not required.
 
 ## Why a tricycle
 
-Most open autonomy stacks assume a differential-drive robot that can rotate
-in place. A cargo trike cannot. With a 1.33 m wheelbase and a 0.6 rad
-steering limit, the minimum turning radius is **1.94 m**, and yaw rate is
-proportional to forward speed — at standstill, steering does nothing.
-
-That single constraint propagates through the entire stack: the global
-planner must produce kinematically feasible paths, the local controller must
-never command in-place rotation, Nav2's default `spin` recovery is useless,
-and goal tolerances have to accept approximate final headings. Most of the
-engineering here follows from taking that seriously.
+A cargo trike cannot rotate in place. With a 1.33 m wheelbase and a limited
+steering angle the minimum turning radius is large, and yaw rate is
+proportional to forward speed — at standstill, steering does nothing. That
+single constraint propagates through the whole stack: the global planner must
+produce kinematically feasible paths, the local controller must never command
+in-place rotation, Nav2's default `spin` recovery is useless, and the vehicle
+recovers from a stuck pose by **reversing**, not pivoting.
 
 ## Status
 
 | Capability | Simulation | Hardware |
 |---|---|---|
 | Steered-tricycle kinematics (`ros2_control`) | Working | Controller written, untested on vehicle |
-| SLAM (`slam_toolbox`) | Working | First map captured |
-| Nav2 navigation, Hybrid-A\* + RPP | Working | Not yet |
-| 2D LiDAR + depth voxel costmaps | Working | LiDAR driver containerised |
+| SLAM (`slam_toolbox`) — full campus mapped & saved | Working | First map captured |
+| AMCL localization on the saved map | Working | Not yet |
+| Nav2 navigation — Smac Hybrid (Dubins, forward-only) + Regulated Pure Pursuit | Working | Not yet |
+| Full-perimeter costmap — 360° LiDAR + front/left/right/rear depth | Working | Depth mounts modelled |
+| Reverse recovery (no-spin BT + `BackUp`) | Working | Not yet |
 | IMU odometry (MPU6050) | — | Publishing to `/imu` |
-| Frontier exploration | Working | Not yet |
+| Frontier exploration | Working (mapping complete) | Not yet |
 | Natural-language task control | Working | Not yet |
-| Reverse manoeuvres | Disabled — no rear sensing | Not yet |
 
 ## Stack
 
-**Planning.** Nav2 `SmacPlannerHybrid` with `minimum_turning_radius: 2.0` and
-Dubins motion, so global paths are drivable by the actual vehicle rather than
-by a holonomic idealisation. Regulated Pure Pursuit for local control with
-`use_rotate_to_heading: false`, and velocity scaling through tight curvature.
+**Planning.** Nav2 `SmacPlannerHybrid` with a bounded minimum turning radius
+and **Dubins (forward-only)** motion, so global paths are drivable by the
+actual vehicle. **Regulated Pure Pursuit** for local control with
+`use_rotate_to_heading: false` and velocity scaling through tight curvature.
 
-**Sensing.** A 360° LiDAR feeds the costmap obstacle layer; a forward depth
-camera feeds a voxel layer, so obstacles below or above the 2D scan plane are
-still avoided. A `cmd_vel_limiter` node bridges Nav2's Twist output to the
-tricycle steering controller, enforcing a speed-dependent steering limit
-derived from a lateral acceleration bound.
+**Recovery.** A steered trike can't execute Nav2's default `Spin`, so
+navigation runs a **no-spin behavior tree**: on failure it clears the
+costmaps, reverses a short distance (`BackUp`), and re-plans. Rear depth
+sensing makes that reverse safe.
 
-**Exploration.** A frontier explorer scores candidates by information gained
-per unit of *real* travel — `info_gain / (1 + A*_path_cost)` — so it sweeps
-continuously instead of ping-ponging across the map. It only selects goals;
-Nav2 does the planning and driving.
+**Sensing.** A 360° LiDAR (masked within 0.45 m of the mast to reject
+self-hits) plus **four depth cameras — front, left, right, rear**. The
+side/rear depth clouds feed the **local** (reactive) costmap voxel layer,
+closing the LiDAR's close-range blind ring around the vehicle body — the
+failure mode where the trike scraped obstacles alongside itself. The
+**global** costmap plans over the saved map + LiDAR only, to stay light on a
+large map. A `cmd_vel_limiter` node bridges Nav2's Twist output to the
+tricycle steering controller and enforces a speed-dependent steering limit.
 
-**The agentic layer.** `bglx_agentic` exposes eight tools over Nav2, TF and
-the LiDAR, and turns robot state into text a model can reason about.
+**Localization.** `slam_toolbox` builds the map. For operations the campus map
+is saved (serialized pose graph + occupancy grid) and localized against with
+**AMCL** (OmniMotionModel tuned for the trike) — lighter than continuous SLAM
+and, crucially, it publishes a stable `map→odom` with no gaps.
 
-- 720 LiDAR rays collapse to eight named sectors, with a 3-ray erosion so a
-  single spurious return cannot report a whole sector as blocked.
-- Turn-in-place commands are rejected with an explanation, because a language
-  model's prior is overwhelmingly differential-drive and the failure would
-  otherwise be silent.
-- Outside the costmap no goal can be planned, so the tool layer refuses to
-  try and says why, rather than letting the planner fail opaquely.
+**Exploration.** An info-gain / path-cost frontier explorer selects goals;
+Nav2 does the planning and driving. Used to build the campus map, now
+complete.
 
-Backends: local (`ollama`), any OpenAI-compatible endpoint, or Anthropic.
-Only one file knows which.
+**The agentic layer.** `bglx_agentic` exposes tools over Nav2, TF and the
+LiDAR, and turns robot state into text a model can reason about — sectorised
+LiDAR, width checks, landmark navigation, and failure translation.
 
 ## Packages
 
 | Package | Role |
 |---|---|
-| `etrike_description` | URDF (modular xacro), Gazebo worlds, sensor models, `ros2_control` tricycle interface, RViz views |
-| `bglx_navigation` | Nav2 bringup and params, `cmd_vel_limiter` steering bridge |
+| `etrike_description` | URDF (modular xacro, incl. `perimeter_sensors.xacro`), Gazebo worlds, sensor models, `ros2_control` tricycle interface, RViz views |
+| `bglx_navigation` | Nav2 bringup + params, no-spin recovery BT, AMCL localization launch, `cmd_vel_limiter` |
 | `bglx_autonomy` | Waypoint follower with LiDAR front-cone obstacle stop |
 | `bglx_exploration` | Info-gain / path-cost frontier explorer |
 | `bglx_agentic` | Sensor and failure translation, LLM tool layer and agent loop |
@@ -119,7 +95,7 @@ Only one file knows which.
 ## Run it
 
 ROS 2 Humble, Gazebo Classic, plus `navigation2`, `nav2-bringup`,
-`slam-toolbox`, `ros2-controllers`, `gazebo-ros2-control`, `topic-tools`.
+`slam-toolbox`, `ros2-controllers`, `gazebo-ros2-control`.
 
 ```bash
 cd bglx_ws
@@ -127,53 +103,67 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-One terminal each, all sourced, in order:
+### A. Map the campus (only needed once)
 
 ```bash
-# 1. Simulation, controllers, odom TF relay
-ros2 launch etrike_description gazebo.launch.py
+ros2 launch etrike_description gazebo.launch.py     # sim + controllers
+ros2 launch etrike_description slam.launch.py       # slam_toolbox (map->odom) + RViz
+ros2 launch bglx_navigation navigation.launch.py    # Nav2
+ros2 launch bglx_exploration explore.launch.py      # autonomous frontier exploration
+```
 
-# 2. SLAM (map -> odom)
-ros2 launch etrike_description slam.launch.py
+Save the finished map (serialized graph = continue/localize, plus occupancy grid):
 
-# 3. Nav2
-ros2 launch bglx_navigation navigation.launch.py
+```bash
+ros2 service call /slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph \
+  "{filename: '$HOME/projects/BGLX/bglx_ws/maps/campus_full'}"
+ros2 run nav2_map_server map_saver_cli -f "$HOME/projects/BGLX/bglx_ws/maps/campus_full"
+```
 
-# 4a. Autonomous frontier exploration
-ros2 launch bglx_exploration explore.launch.py
+### B. Operate on the saved map (normal run)
 
-# 4b. ...or natural-language control
-ollama pull qwen2.5:7b
+```bash
+ros2 launch etrike_description gazebo.launch.py            # sim + controllers
+ros2 launch bglx_navigation amcl_localization.launch.py   # map_server + AMCL (no slam_toolbox)
+ros2 launch bglx_navigation navigation.launch.py          # Nav2
+# then: natural-language control, or RViz 2D Goal Pose
 ros2 run bglx_agentic agent
+```
 
-# 4c. ...or a manual goal from RViz with the Nav2 Goal tool
+RViz (until it's folded into the localization launch):
+
+```bash
+ros2 run rviz2 rviz2 -d src/etrike_description/rviz/slam.rviz --ros-args -p use_sim_time:=true
 ```
 
 ## Known limitations
 
-Stated explicitly, because they matter more than the feature list.
-
-- **Reverse is disabled.** The planner is Dubins forward-only and the
-  controller has `allow_reversing: false`, so the trike can get into
-  positions it cannot leave. Enabling Reeds-Shepp requires rear sensing in
-  the costmap first — backing a loaded vehicle blind is not acceptable on a
-  campus.
-- **The sim LiDAR minimum range is masked to 0.45 m** to reject beams
-  clipping the trike's own frame. That is a workaround; the correct fix is
-  relocating the sensor, and the same self-occlusion needs checking on the
-  physical mount.
+- **Reverse is recovery-only.** The planner is Dubins forward-only; the trike
+  gets out of stuck poses via a straight `BackUp` behavior, not arcing
+  reverse. Reeds-Shepp planning (arcing reverse) is future work now that rear
+  depth sensing exists.
+- **Perimeter depth on the local costmap only.** The global costmap plans over
+  the saved map + LiDAR to stay light on an 80×136 m campus. Four depth
+  cameras plus a large map is compute-heavy; sensor rates are tuned down.
 - **`track_unknown_space` is disabled** on the global costmap so the planner
-  will route through unexplored ground. Acceptable in simulation, not on a
-  real campus.
-- **Failure diagnoses are validated in simulation only.** Signals like
-  "stalled for N seconds" are clean in Gazebo and will be considerably
-  noisier with real wheel slip and outdoor LiDAR dropout.
+  will route through unexplored ground. Fine in simulation.
+- **Failure diagnoses are validated in simulation only** and will be noisier
+  with real wheel slip and outdoor LiDAR dropout.
+
+## Open threads (next)
+
+- **Speed/agility pass** — `desired_linear_vel`, lookahead, and collision
+  horizon tuned together; check the tricycle controller's
+  `reduce_wheel_speed_until_steering_reached` as a possible speed throttle.
+- **Vision `look` tool** returns nothing — VLM backend needs fixing.
+- **Fold RViz into `amcl_localization.launch.py`**; verify AMCL start pose.
+- **Landmark/map coverage** — some landmarks may fall outside mapped ground;
+  audit and re-map thin areas.
 
 ## Roadmap
 
 - Hardware bring-up: throttle-by-wire, the `ros2_control` tricycle controller
   on the physical vehicle, IMU/GPS odometry fusion.
-- Rear sensing, then Reeds-Shepp planning for reverse manoeuvres.
+- Reeds-Shepp planning for arcing reverse, now that rear depth sensing exists.
 - Validating the failure-translation layer against real-world noise.
 - Measuring how far local inference gets before cloud models are needed.
-- Exploration tuning against real coverage metrics.
