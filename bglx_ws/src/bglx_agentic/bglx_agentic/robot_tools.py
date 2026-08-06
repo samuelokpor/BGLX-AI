@@ -56,6 +56,10 @@ GLOBAL_FRAME = 'map'
 ODOM_FRAME = 'odom'
 FOOTPRINT_FORWARD_REACH = 1.25
 NAV_TIMEOUT = 180.0
+REVERSE_STRAIGHT_MAX = 5.0      # m: reverse <= this goes straight-back, no reorientation
+REVERSE_STRAIGHT_TOL = 0.30     # m: |left| below this counts as a pure straight reverse
+REVERSE_SPEED = 0.4             # m/s: closed-loop straight-reverse speed
+REVERSE_STOP_DIST = 1.6         # m: rear clearance floor (matches drive())
 
 
 def rpy_from_quat(q):
@@ -533,6 +537,85 @@ class RobotTools(Node):
         self._last_failure = msg
         return msg
 
+    def _straight_reverse(self, distance):
+        """Back up `distance` metres along the CURRENT heading, no turning.
+
+        Closed-loop on odom displacement (not duration, which slips), with the
+        same rear-lidar safety floor as drive(). Steering is held at zero, so
+        the vehicle tracks a straight line backwards - exactly what a steered
+        trike can do trivially, and what Nav2 refuses to do because a reverse
+        pose-goal drags in heading convergence and a 30m loop.
+        """
+        distance = abs(float(distance))
+
+        upright, att = self.check_attitude()
+        if upright is False:
+            self._last_failure = att
+            return "Straight reverse refused. " + att
+
+        before = self._pose()
+        if before is None:
+            return "Straight reverse failed: robot pose unavailable."
+
+        # Pre-flight rear clearance.
+        summary = summarise_scan(self._scan)
+        if summary:
+            rear = min(summary.get("rear", 99.0),
+                       summary.get("rear-left", 99.0),
+                       summary.get("rear-right", 99.0))
+            if rear < REVERSE_STOP_DIST:
+                msg = ("Straight reverse REFUSED: only %.2fm of clearance "
+                       "behind, %.2fm needed. Nothing was moved."
+                       % (rear, REVERSE_STOP_DIST))
+                self._last_failure = msg
+                return msg
+
+        msg = Twist()
+        msg.linear.x = -REVERSE_SPEED
+        msg.angular.z = 0.0
+
+        t0 = time.time()
+        moved = 0.0
+        aborted = None
+        timeout = distance / REVERSE_SPEED + 6.0   # generous watchdog
+        while True:
+            cur = self._pose()
+            if cur:
+                moved = math.hypot(cur[0] - before[0], cur[1] - before[1])
+            if moved >= distance:
+                break
+            summary = summarise_scan(self._scan)
+            if summary:
+                rear = min(summary.get("rear", 99.0),
+                           summary.get("rear-left", 99.0),
+                           summary.get("rear-right", 99.0))
+                if rear < REVERSE_STOP_DIST:
+                    aborted = (rear, moved, time.time() - t0)
+                    break
+            if time.time() - t0 > timeout:
+                aborted = ("timeout", moved, time.time() - t0)
+                break
+            self.cmd_pub.publish(msg)
+            time.sleep(0.05)
+        self.cmd_pub.publish(Twist())
+
+        out = ("Straight reverse: backed up %.2fm of %.2fm requested along "
+               "heading (no reorientation)." % (moved, distance))
+        if aborted is not None:
+            reason, got, el = aborted
+            if reason == "timeout":
+                out += (" STOPPED: watchdog fired at %.1fs after %.2fm - the "
+                        "vehicle may be obstructed or slipping." % (el, got))
+            else:
+                out += (" STOPPED EARLY after %.1fs: obstacle within %.2fm "
+                        "behind. Straight reverse halts rather than backing "
+                        "into it." % (el, reason))
+        else:
+            out += " Completed."
+        self._last_failure = ("Last straight reverse completed."
+                              if aborted is None else out)
+        return out + " " + self.get_pose()
+
     def navigate_relative(self, forward=0.0, left=0.0):
         """Move relative to the robot's CURRENT pose and heading.
 
@@ -551,6 +634,16 @@ class RobotTools(Node):
 
         forward = float(forward)
         left = float(left)
+
+        # Straight-back rule: a short reverse with no sideways component is a
+        # pure back-up the trike can do directly. Routing it through Nav2 as a
+        # pose goal drags in heading convergence and produces a huge forward
+        # loop (observed: 34m travelled for an 8m reverse). Above the threshold,
+        # fall through to Nav2 so it can plan a reorienting Reeds-Shepp path.
+        if (forward < 0.0 and abs(left) < REVERSE_STRAIGHT_TOL
+                and abs(forward) <= REVERSE_STRAIGHT_MAX):
+            return self._straight_reverse(abs(forward))
+
         gx = x + forward * math.cos(yaw) - left * math.sin(yaw)
         gy = y + forward * math.sin(yaw) + left * math.cos(yaw)
 

@@ -48,4 +48,4 @@ tricycle_steering_controller:
     # --- input ---
     use_stamped_vel: false          # subscribe ~/reference_unstamped (geometry_msgs/Twist)
     reference_timeout: 0.5          # stop if no command within 0.5 s
-    reduce_wheel_speed_until_steering_reached: true
+    reduce_wheel_speed_until_steering_reached: false

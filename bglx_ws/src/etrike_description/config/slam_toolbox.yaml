@@ -11,7 +11,7 @@ slam_toolbox:
     base_frame: base_footprint
     scan_topic: /etrike/scan
     use_map_saver: true
-    mode: localization
+    mode: mapping
     debug_logging: false
     throttle_scans: 1
     transform_publish_period: 0.05
@@ -51,8 +51,3 @@ slam_toolbox:
     minimum_angle_penalty: 0.9
     minimum_distance_penalty: 0.5
     use_response_expansion: true
-    map_file_name: /home/ros2/projects/BGLX/bglx_ws/maps/campus_full
-    map_start_pose:
-    - 0.0
-    - 0.0
-    - 0.0

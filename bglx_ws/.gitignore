@@ -1,0 +1,5 @@
+*.bak_*
+*.localization_bak
+__pycache__/
+frames_*.gv
+frames_*.pdf
