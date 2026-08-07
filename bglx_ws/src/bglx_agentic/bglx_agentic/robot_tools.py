@@ -40,7 +40,7 @@ from tf2_ros import TransformException
 from .vision import VisionTool
 from .map_check import compare as compare_map, confidence_note
 from .corridor import check_corridor, can_turn_around
-from .observations import (summarise_scan, format_scan, diagnose_nav_failure,
+from .observations import (summarise_scan, format_scan, SECTORS, diagnose_nav_failure,
                            MIN_TURN_RADIUS, MAX_LINEAR_VEL,
                            MIN_SPEED_FOR_YAW, max_yaw_rate)
 
@@ -56,6 +56,8 @@ GLOBAL_FRAME = 'map'
 ODOM_FRAME = 'odom'
 FOOTPRINT_FORWARD_REACH = 1.25
 NAV_TIMEOUT = 180.0
+LOCAL_COSTMAP_LETHAL = 90      # occupancy 0..100; >= this counts as an obstacle
+COSTMAP_SENSE_MAX_RANGE = 6.0  # m: how far to ray-march the costmap per sector
 REVERSE_STRAIGHT_MAX = 5.0      # m: reverse <= this goes straight-back, no reorientation
 REVERSE_STRAIGHT_TOL = 0.30     # m: |left| below this counts as a pure straight reverse
 REVERSE_SPEED = 0.4             # m/s: closed-loop straight-reverse speed
@@ -114,6 +116,8 @@ class RobotTools(Node):
         self._bounds = None
         self._static_grid = None
         self._static_info = None
+        self._local_grid = None
+        self._local_info = None
         self._cov = None
         self._plan_len = 0
         self._counts = {'scan': 0, 'odom': 0, 'costmap': 0}
@@ -126,6 +130,9 @@ class RobotTools(Node):
                                  SENSOR_QOS, callback_group=self.cb_group)
         self.create_subscription(OccupancyGrid, costmap_topic,
                                  self._on_costmap, MAP_QOS,
+                                 callback_group=self.cb_group)
+        self.create_subscription(OccupancyGrid, '/local_costmap/costmap',
+                                 self._on_local_costmap, MAP_QOS,
                                  callback_group=self.cb_group)
         self.create_subscription(Path, '/plan', self._on_plan, 1,
                                  callback_group=self.cb_group)
@@ -309,7 +316,59 @@ class RobotTools(Node):
             msg += " " + note
         return msg
 
+    def _on_local_costmap(self, msg):
+        with self._lock:
+            self._local_grid = list(msg.data)
+            self._local_info = msg.info
+
+    def _costmap_sectors(self, max_range=COSTMAP_SENSE_MAX_RANGE):
+        """Ray-march the LOCAL costmap outward per sector -> {sector: nearest obstacle m}.
+        Reads the fused costmap (LiDAR + front depth cam + perimeter ray sensors), so
+        low obstacles (e.g. benches) the raw 2D LiDAR flies over are included. Returns
+        None if costmap or pose is unavailable so the caller falls back to raw scan."""
+        with self._lock:
+            grid = self._local_grid
+            info = self._local_info
+        if grid is None or info is None:
+            return None
+        pose = self._lookup(ODOM_FRAME)   # local costmap is in the odom frame
+        if pose is None:
+            return None
+        rx, ry, ryaw = pose
+        res = info.resolution
+        ox = info.origin.position.x
+        oy = info.origin.position.y
+        W, H = info.width, info.height
+        step = res * 0.5
+        n_rays = 5
+        out = {}
+        for name, lo, hi in SECTORS:
+            best = None
+            for k in range(n_rays):
+                frac = (k + 0.5) / n_rays
+                bearing = ryaw + math.radians(lo + frac * (hi - lo))
+                d = step
+                while d <= max_range:
+                    wx = rx + d * math.cos(bearing)
+                    wy = ry + d * math.sin(bearing)
+                    cx = int((wx - ox) / res)
+                    cy = int((wy - oy) / res)
+                    if not (0 <= cx < W and 0 <= cy < H):
+                        break
+                    if grid[cy * W + cx] >= LOCAL_COSTMAP_LETHAL:
+                        best = d if best is None else min(best, d)
+                        break
+                    d += step
+            if best is not None:
+                out[name] = round(best, 2) if name not in out else min(out[name], round(best, 2))
+        return out if out else None
+
     def get_scan_summary(self):
+        """Nearest obstacle per sector. Prefers the fused LOCAL costmap (catches low
+        obstacles the 2D LiDAR misses); falls back to raw LiDAR if costmap unavailable."""
+        cm = self._costmap_sectors()
+        if cm is not None:
+            return format_scan(cm)
         with self._lock:
             scan = self._scan
         return format_scan(summarise_scan(scan))
@@ -650,7 +709,20 @@ class RobotTools(Node):
         note = ("Relative move: %.2fm forward, %.2fm left from (%.2f, %.2f) "
                 "at %.1f deg -> absolute goal (%.2f, %.2f). "
                 % (forward, left, x, y, math.degrees(yaw), gx, gy))
-        return note + self.navigate_to(gx, gy, yaw)
+
+        # Do NOT constrain the goal heading for a straight-ahead move.
+        #
+        # Passing the current yaw as the goal yaw turns "go 8m ahead" into
+        # "reach that point AND be pointing exactly this way". A few degrees of
+        # drift then makes the heading constraint unsatisfiable without a loop,
+        # because this platform cannot correct heading in place. Observed: an
+        # 8m goal produced 22.39m of travel over 129.8s, finishing 90 degrees
+        # off, in open ground with the nearest obstacle 6m away.
+        #
+        # For a pure forward move, where the vehicle ends up pointing is not
+        # part of the request. Leave yaw free and let Nav2 arrive naturally.
+        goal_yaw = None if abs(left) < REVERSE_STRAIGHT_TOL else yaw
+        return note + self.navigate_to(gx, gy, goal_yaw)
 
     def turn_by(self, degrees):
         """Change heading by driving the arc directly, measuring after each try.
