@@ -3,3 +3,5 @@
 __pycache__/
 frames_*.gv
 frames_*.pdf
+*.bak
+*.bak3
