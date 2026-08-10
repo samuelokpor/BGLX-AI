@@ -214,6 +214,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        front_disc:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         front_hubcap:
           Alpha: 1
           Show Axes: false
@@ -239,10 +244,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        left_depth_optical:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         lidar_base:
           Alpha: 1
           Show Axes: false
@@ -263,10 +264,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        rear_depth_optical:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         rear_left_hub_motor:
           Alpha: 1
           Show Axes: false
@@ -332,10 +329,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        right_depth_optical:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         screen:
           Alpha: 1
           Show Axes: false
@@ -592,6 +585,27 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Alpha: 0.699999988079071
+      Class: rviz_default_plugins/Map
+      Color Scheme: map
+      Draw Behind: false
+      Enabled: true
+      Name: Map
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_costmap/costmap
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_costmap/costmap_updates
+      Use Timestamp: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -655,5 +669,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1200
-  X: 50
-  Y: 50
+  X: 2011
+  Y: 214

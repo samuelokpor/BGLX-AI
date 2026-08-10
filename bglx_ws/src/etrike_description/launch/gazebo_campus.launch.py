@@ -22,7 +22,7 @@ def generate_launch_description():
     
     # Paths
     urdf_file = os.path.join(pkg_dir, 'urdf', 'etrike.urdf.xacro')
-    world_file = os.path.join(pkg_dir, 'worlds', 'delivery_campus.world')
+    world_file = os.path.join(pkg_dir, 'worlds', 'oxford_college.world')
     rviz_config = os.path.join(pkg_dir, 'rviz', 'etrike_sim.rviz')
     
     # Launch configurations

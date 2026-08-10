@@ -70,5 +70,29 @@
     <xacro:perimeter_prox name="left_depth"  parent="${parent}" x="0.45"  y="0.28"  z="0.45" yaw="1.5708"/>
     <xacro:perimeter_prox name="right_depth" parent="${parent}" x="0.45"  y="-0.28" z="0.45" yaw="-1.5708"/>
     <xacro:perimeter_prox name="rear_depth"  parent="${parent}" x="-0.10" y="0.0"   z="0.45" yaw="3.14159"/>
+      <link name="front_lidar_link">
+      <inertial>
+        <mass value="0.25"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="0.000152" ixy="0" ixz="0"
+                 iyy="0.000152" iyz="0" izz="0.0002"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><cylinder radius="0.04" length="0.05"/></geometry>
+        <material name="lidar"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry><cylinder radius="0.04" length="0.05"/></geometry>
+      </collision>
+    </link>
+
+    <joint name="front_lidar_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="front_lidar_link"/>
+      <origin xyz="1.05 0 0.30" rpy="0 0 0"/>
+    </joint>
+
   </xacro:macro>
 </robot>

@@ -34,7 +34,6 @@
 <gazebo reference="camera_rear_left"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="camera_rear_right"><material>Gazebo/Black</material></gazebo>
   <gazebo reference="camera_rear_main"><material>Gazebo/Black</material></gazebo>
-  <gazebo reference="camera_ground"><material>Gazebo/Black</material></gazebo>
 
   <!-- ============================================================== -->
   <!-- WHEEL FRICTION                                                 -->
@@ -185,35 +184,6 @@
 <!-- ============================================================== -->
   <!-- GROUND CAMERA - Close obstacle detection                       -->
   <!-- ============================================================== -->
-  
-  <gazebo reference="camera_ground">
-    <sensor name="camera_ground" type="camera">
-      <always_on>true</always_on>
-      <visualize>true</visualize>
-      <update_rate>15</update_rate>
-      <camera name="ground">
-        <horizontal_fov>1.2</horizontal_fov>
-        <image>
-          <width>320</width>
-          <height>240</height>
-          <format>R8G8B8</format>
-        </image>
-        <clip>
-          <near>0.05</near>
-          <far>5</far>
-        </clip>
-      </camera>
-      <plugin name="camera_ground_controller" filename="libgazebo_ros_camera.so">
-        <ros>
-          <namespace>/etrike</namespace>
-          <remapping>image_raw:=camera/ground/image_raw</remapping>
-          <remapping>camera_info:=camera/ground/camera_info</remapping>
-        </ros>
-        <camera_name>ground</camera_name>
-        <frame_name>camera_ground</frame_name>
-      </plugin>
-    </sensor>
-  </gazebo>
 
   <!-- ============================================================== -->
   <!-- IMU SENSOR                                                     -->
@@ -315,4 +285,40 @@
       </plugin>
     </sensor>
   </gazebo>
+  <gazebo reference="front_lidar_link">
+    <sensor name="front_lidar" type="ray">
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>15</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-2.0944</min_angle>
+            <max_angle>2.0944</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.15</min>
+          <max>5.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <plugin name="front_scan" filename="libgazebo_ros_ray_sensor.so">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>~/out:=front_scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>front_lidar_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
 </robot>
