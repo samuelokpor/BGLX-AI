@@ -67,6 +67,19 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "check_low_obstacles",
+        "description": ("Check for LOW obstacles ahead using the front LiDAR "
+                        "mounted at 0.35m. The main LiDAR sits at 0.98m and "
+                        "sees straight over anything shorter than that - "
+                        "kerbs, boxes, planters, luggage, a crouching child. "
+                        "This is the ONLY sensor that detects them. Call this "
+                        "before moving forward in any unfamiliar or cluttered "
+                        "place, and whenever the path looks clear but you are "
+                        "not certain the ground is. A BLOCKED result here "
+                        "outranks a clear costmap or a clear scan summary."),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "check_map_against_sensors",
         "description": ("Compare the saved map with what the LiDAR sees right "
                         "now. Reports things PRESENT that the map does not "

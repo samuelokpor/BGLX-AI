@@ -215,6 +215,7 @@ class Agent:
             "check_width": lambda: self.tools.check_width(args.get("direction_deg", 0.0)),
             "check_turn_around": lambda: self.tools.check_turn_around(),
             "check_map_against_sensors": lambda: self.tools.check_map_against_sensors(),
+            "check_low_obstacles": lambda: self.tools.check_low_obstacles(),
             "check_attitude": lambda: self.tools.check_attitude()[1],
             "list_landmarks": lambda: self.tools.list_landmarks(),
             "navigate_to": lambda: self.tools.navigate_to(
@@ -260,7 +261,8 @@ class Agent:
         names = ("get_pose", "get_scan_summary", "navigate_to_landmark",
                  "navigate_relative", "navigate_to", "turn_by", "mark_here",
                  "drive", "wait", "stop", "list_landmarks",
-                 "get_last_failure", "check_attitude", "check_systems", "look")
+                 "get_last_failure", "check_attitude", "check_systems", "look",
+                 "check_low_obstacles")
         for n in names:
             if re.search(re.escape(n) + r"\s*[\({\[]", text):
                 return True

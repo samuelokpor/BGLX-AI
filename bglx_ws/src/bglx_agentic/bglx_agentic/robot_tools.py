@@ -92,6 +92,7 @@ class RobotTools(Node):
         super().__init__('bglx_agentic_tools')
 
         self.declare_parameter('scan_topic', '/etrike/scan')
+        self.declare_parameter('front_scan_topic', '/etrike/front_scan')
         self.declare_parameter('odom_topic',
                                '/tricycle_steering_controller/odometry')
         self.declare_parameter('costmap_topic', '/global_costmap/costmap')
@@ -120,12 +121,17 @@ class RobotTools(Node):
         self._local_info = None
         self._cov = None
         self._plan_len = 0
-        self._counts = {'scan': 0, 'odom': 0, 'costmap': 0}
+        self._front_scan = None
+        self._counts = {'scan': 0, 'front_scan': 0, 'odom': 0, 'costmap': 0}
         self._lock = threading.Lock()
         self._last_failure = "No navigation attempted yet."
 
         self.create_subscription(LaserScan, scan_topic, self._on_scan,
                                  SENSOR_QOS, callback_group=self.cb_group)
+        self.create_subscription(
+            LaserScan,
+            self.get_parameter('front_scan_topic').value,
+            self._on_front_scan, SENSOR_QOS, callback_group=self.cb_group)
         self.create_subscription(Odometry, odom_topic, self._on_odom,
                                  SENSOR_QOS, callback_group=self.cb_group)
         self.create_subscription(OccupancyGrid, costmap_topic,
@@ -162,6 +168,11 @@ class RobotTools(Node):
         with self._lock:
             self._scan = msg
             self._counts['scan'] += 1
+
+    def _on_front_scan(self, msg):
+        with self._lock:
+            self._front_scan = msg
+            self._counts['front_scan'] += 1
 
     def _on_odom(self, msg):
         with self._lock:
@@ -373,6 +384,37 @@ class RobotTools(Node):
             scan = self._scan
         return format_scan(summarise_scan(scan))
 
+    def check_low_obstacles(self):
+        """Low obstacles ahead, from the front LiDAR at ~0.35m.
+
+        The main LiDAR sits at ~0.98m and sees straight over anything shorter
+        than that: kerbs, boxes, planters, a crouching child. This sensor is
+        the only one that catches them, so a clear answer here is not the same
+        as a clear path, and a blocked answer here outranks a clear costmap.
+        """
+        with self._lock:
+            scan = self._front_scan
+        if scan is None:
+            return ("No front LiDAR data. Low obstacles CANNOT be detected. "
+                    "Treat the ground ahead as unverified.")
+        hits = []
+        for i, r in enumerate(scan.ranges):
+            if not math.isfinite(r) or r < scan.range_min or r > scan.range_max:
+                continue
+            a = math.degrees(scan.angle_min + i * scan.angle_increment)
+            if -60.0 <= a <= 60.0:
+                hits.append((a, r))
+        if not hits:
+            return ("Front LiDAR clear: nothing within %.1fm in the forward "
+                    "120 degree arc, at 0.35m height."
+                    % scan.range_max)
+        ang, near = min(hits, key=lambda t: t[1])
+        side = "ahead" if abs(ang) < 15 else ("left" if ang > 0 else "right")
+        lvl = "BLOCKED" if near < 1.5 else ("CLOSE" if near < 3.0 else "clear")
+        return ("Front LiDAR %s: nearest low obstacle %.2fm %s (%.0f degrees), "
+                "measured at 0.35m height. %d returns in the forward arc."
+                % (lvl, near, side, ang, len(hits)))
+
     def check_map_against_sensors(self):
         """Does the saved map still match what the LiDAR sees?"""
         pose = self._pose()
@@ -518,7 +560,13 @@ class RobotTools(Node):
 
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = GLOBAL_FRAME
-        goal.pose.header.stamp = self.get_clock().now().to_msg()
+        # Zero stamp = "use the latest available transform". A concrete
+        # timestamp pins the goal to one instant, and Nav2's behaviour tree
+        # re-plans against the same message every cycle - so each retry asks
+        # TF for a transform further into the past. Observed: the planner
+        # requesting t=4803.000 while the buffer had advanced to t=4821, then
+        # aborting, running backup, and failing the goal.
+        goal.pose.header.stamp = rclpy.time.Time().to_msg()
         goal.pose.pose.position.x = float(x)
         goal.pose.pose.position.y = float(y)
         goal.pose.pose.orientation = quat_from_yaw(float(yaw or 0.0))
