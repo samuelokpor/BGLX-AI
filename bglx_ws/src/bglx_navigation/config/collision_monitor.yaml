@@ -1,0 +1,75 @@
+collision_monitor:
+  ros__parameters:
+    use_sim_time: true
+
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+
+    # ISOLATED TEST TOPICS.
+    # These are deliberately NOT connected to the real robot controller.
+    cmd_vel_in_topic: "/etrike/cmd_vel"
+    cmd_vel_out_topic: "/etrike/collision_checked_cmd_vel"
+
+    transform_tolerance: 0.5
+    source_timeout: 1.0
+    base_shift_correction: true
+    stop_pub_timeout: 1.0
+
+    # Two safety zones:
+    #
+    # FrontStop:
+    #   immediate protective region.
+    #
+    # FrontSlow:
+    #   larger region for slowing near people / obstacles.
+    polygons: ["FrontStop", "FrontSlow"]
+
+    FrontStop:
+      type: "polygon"
+
+      # base_link coordinates:
+      # front = +2.05 m
+      # rear  = -0.30 m
+      # sides = +/-0.55 m
+      points: [
+        2.05,  0.55,
+        2.05, -0.55,
+       -0.30, -0.55,
+       -0.30,  0.55
+      ]
+
+      action_type: "stop"
+      max_points: 2
+      visualize: true
+      polygon_pub_topic: "/etrike/front_stop_polygon"
+      enabled: true
+
+
+    FrontSlow:
+      type: "polygon"
+
+      # Larger outer zone.
+      points: [
+        3.00,  0.90,
+        3.00, -0.90,
+       -0.30, -0.90,
+       -0.30,  0.90
+      ]
+
+      action_type: "slowdown"
+      max_points: 2
+
+      # Output 35% of requested velocity while active.
+      slowdown_ratio: 0.35
+
+      visualize: true
+      polygon_pub_topic: "/etrike/front_slow_polygon"
+      enabled: true
+
+
+    observation_sources: ["front_scan"]
+
+    front_scan:
+      type: "scan"
+      topic: "/etrike/front_scan"
+      enabled: true
