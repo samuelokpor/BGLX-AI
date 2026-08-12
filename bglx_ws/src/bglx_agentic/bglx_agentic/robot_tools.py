@@ -472,11 +472,10 @@ class RobotTools(Node):
 
         v = grid[cy * info.width + cx]
         if v < 0:
-            return ("navigate_to refused: the goal (%.2f, %.2f) is in "
-                    "UNEXPLORED space - the map has no information there, so "
-                    "no path can be planned to it. Pick a goal inside known "
-                    "ground, or approach in shorter stages so the map fills "
-                    "in as the vehicle advances." % (x, y))
+            # Unknown space is allowed by the active Smac Hybrid planner.
+            # Let Nav2 decide whether a path through unknown space is feasible.
+            # Known occupied cells are still rejected below.
+            return None
         if v >= 65:
             # How far back along the bearing is open ground?
             import math as _m
@@ -569,7 +568,24 @@ class RobotTools(Node):
         goal.pose.header.stamp = rclpy.time.Time().to_msg()
         goal.pose.pose.position.x = float(x)
         goal.pose.pose.position.y = float(y)
-        goal.pose.pose.orientation = quat_from_yaw(float(yaw or 0.0))
+        # `yaw or 0.0` was silently turning "no heading preference" into
+        # "arrive facing due east". A PoseStamped always carries an
+        # orientation, so None has to become SOMETHING - and 0.0 is the worst
+        # choice available. Observed: a trike heading 177 deg was given a goal
+        # demanding 0 deg, and with use_rotate_to_heading false it can only
+        # correct heading by driving arcs. It travelled 80.95m for a 5m goal.
+        #
+        # Pointing the goal along the direction of travel makes the constraint
+        # self-satisfying: driving straight at a point arrives pointing at it.
+        if yaw is None:
+            start = self._pose()
+            if start is not None:
+                goal_yaw = math.atan2(float(y) - start[1], float(x) - start[0])
+            else:
+                goal_yaw = 0.0
+        else:
+            goal_yaw = float(yaw)
+        goal.pose.pose.orientation = quat_from_yaw(goal_yaw)
 
         with self._lock:
             self._plan_len = 0
