@@ -12,6 +12,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     pkg = get_package_share_directory('bglx_navigation')
+    bt_xml = os.path.join(pkg, 'config', 'bt', 'navigate_no_spin.xml')
     params = os.path.join(pkg, 'config', 'nav2_params.yaml')
     collision_params = os.path.join(
         pkg, 'config', 'collision_monitor.yaml'
@@ -50,7 +51,7 @@ def generate_launch_description():
         ),
         Node(
             package='nav2_bt_navigator', executable='bt_navigator',
-            output='screen', parameters=common,
+            output='screen', parameters=common + [{'default_nav_to_pose_bt_xml': bt_xml}],
         ),
         Node(
             package='nav2_waypoint_follower', executable='waypoint_follower',
