@@ -22,8 +22,7 @@ collision_monitor:
     #
     # FrontSlow:
     #   larger region for slowing near people / obstacles.
-    polygons: ["FrontStop", "FrontSlow"]
-
+    polygons: ["LeftStop", "RightStop", "RearStop", "FrontStop", "LeftSlow", "RightSlow", "RearSlow", "FrontSlow"]
     FrontStop:
       type: "polygon"
 
@@ -67,9 +66,114 @@ collision_monitor:
       enabled: true
 
 
-    observation_sources: ["front_scan"]
+    # --------------------------------------------------
+    # Side proximity protection.
+    # Robot footprint lateral edges are y = +/-0.40 m.
+    # --------------------------------------------------
 
+    LeftStop:
+      type: "polygon"
+      points: [
+         1.25,  0.75,
+         1.25,  0.40,
+        -0.30,  0.40,
+        -0.30,  0.75
+      ]
+      action_type: "stop"
+      max_points: 2
+      visualize: true
+      polygon_pub_topic: "/etrike/left_stop_polygon"
+      enabled: true
+
+    RightStop:
+      type: "polygon"
+      points: [
+         1.25, -0.40,
+         1.25, -0.75,
+        -0.30, -0.75,
+        -0.30, -0.40
+      ]
+      action_type: "stop"
+      max_points: 2
+      visualize: true
+      polygon_pub_topic: "/etrike/right_stop_polygon"
+      enabled: true
+
+    LeftSlow:
+      type: "polygon"
+      points: [
+         1.25,  1.20,
+         1.25,  0.40,
+        -0.30,  0.40,
+        -0.30,  1.20
+      ]
+      action_type: "slowdown"
+      max_points: 2
+      slowdown_ratio: 0.35
+      visualize: true
+      polygon_pub_topic: "/etrike/left_slow_polygon"
+      enabled: true
+
+    RightSlow:
+      type: "polygon"
+      points: [
+         1.25, -0.40,
+         1.25, -1.20,
+        -0.30, -1.20,
+        -0.30, -0.40
+      ]
+      action_type: "slowdown"
+      max_points: 2
+      slowdown_ratio: 0.35
+      visualize: true
+      polygon_pub_topic: "/etrike/right_slow_polygon"
+      enabled: true
+    RearStop:
+      type: "polygon"
+      points: [
+        -0.30,  0.55,
+        -0.30, -0.55,
+        -1.00, -0.55,
+        -1.00,  0.55
+      ]
+      action_type: "stop"
+      max_points: 2
+      visualize: true
+      polygon_pub_topic: "/etrike/rear_stop_polygon"
+      enabled: true
+
+    RearSlow:
+      type: "polygon"
+      points: [
+        -0.30,  0.90,
+        -0.30, -0.90,
+        -1.60, -0.90,
+        -1.60,  0.90
+      ]
+      action_type: "slowdown"
+      max_points: 2
+      slowdown_ratio: 0.35
+      visualize: true
+      polygon_pub_topic: "/etrike/rear_slow_polygon"
+      enabled: true
+
+    observation_sources: ["front_scan", "left_scan", "right_scan", "rear_scan"]
     front_scan:
       type: "scan"
       topic: "/etrike/front_scan"
+      enabled: true
+
+    left_scan:
+      type: "scan"
+      topic: "/etrike/left_depth/scan"
+      enabled: true
+
+    right_scan:
+      type: "scan"
+      topic: "/etrike/right_depth/scan"
+      enabled: true
+
+    rear_scan:
+      type: "scan"
+      topic: "/etrike/rear_depth/scan"
       enabled: true
