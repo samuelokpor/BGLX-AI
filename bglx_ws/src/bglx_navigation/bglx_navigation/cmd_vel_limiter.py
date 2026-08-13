@@ -53,6 +53,23 @@ class CmdVelLimiter(Node):
         self.declare_parameter('front_scan_timeout', 0.75)
         self.declare_parameter('fail_closed_on_front_scan_loss', True)
 
+        # Independent reverse-motion safety guard.
+        self.declare_parameter(
+            'rear_scan_topic',
+            '/etrike/rear_depth/scan')
+        self.declare_parameter(
+            'rear_stop_distance',
+            0.80)
+        self.declare_parameter(
+            'rear_stop_half_angle_deg',
+            20.0)
+        self.declare_parameter(
+            'rear_scan_timeout',
+            0.75)
+        self.declare_parameter(
+            'fail_closed_on_rear_scan_loss',
+            True)
+
         gp = self.get_parameter
 
         self.L = float(gp('wheelbase').value)
@@ -86,6 +103,17 @@ class CmdVelLimiter(Node):
         self.fail_closed = bool(
             gp('fail_closed_on_front_scan_loss').value)
 
+        self.rear_scan_topic = gp(
+            'rear_scan_topic').value
+        self.rear_stop_distance = float(
+            gp('rear_stop_distance').value)
+        self.rear_half_angle = math.radians(
+            float(gp('rear_stop_half_angle_deg').value))
+        self.rear_scan_timeout = float(
+            gp('rear_scan_timeout').value)
+        self.rear_fail_closed = bool(
+            gp('fail_closed_on_rear_scan_loss').value)
+
         self.pub = self.create_publisher(
             Twist,
             out_topic,
@@ -103,6 +131,12 @@ class CmdVelLimiter(Node):
             self.on_front_scan,
             qos_profile_sensor_data)
 
+        self.rear_scan_sub = self.create_subscription(
+            LaserScan,
+            self.rear_scan_topic,
+            self.on_rear_scan,
+            qos_profile_sensor_data)
+
         self._tgt_v = 0.0
         self._tgt_w = 0.0
         self._last_w = 0.0
@@ -110,6 +144,9 @@ class CmdVelLimiter(Node):
 
         self._front_near = None
         self._front_scan_stamp = None
+
+        self._rear_near = None
+        self._rear_scan_stamp = None
 
         self._hard_stop_active = False
         self._last_stop_log_time = -1e9
@@ -203,6 +240,74 @@ class CmdVelLimiter(Node):
 
         return None
 
+    def on_rear_scan(self, msg: LaserScan):
+        """
+        Find the nearest valid return inside the rear
+        collision-safety arc.
+
+        rear_depth_link is physically rotated to face -X,
+        so angle zero in this LaserScan is straight behind
+        the vehicle.
+        """
+        nearest = None
+
+        for i, r in enumerate(msg.ranges):
+            if not math.isfinite(r):
+                continue
+
+            if r < msg.range_min or r > msg.range_max:
+                continue
+
+            angle = msg.angle_min + i * msg.angle_increment
+
+            if abs(angle) > self.rear_half_angle:
+                continue
+
+            if nearest is None or r < nearest:
+                nearest = float(r)
+
+        self._rear_near = nearest
+        self._rear_scan_stamp = self.get_clock().now()
+
+
+    def _rear_guard_reason(self, v):
+        """
+        Return a reason if reverse movement must be stopped.
+
+        Rear sensor state never blocks forward escape.
+        """
+
+        # This rear sensor only restricts reverse motion.
+        if v >= 0.0:
+            return None
+
+        if self._rear_scan_stamp is None:
+            if self.rear_fail_closed:
+                return 'no rear_scan received yet'
+            return None
+
+        age = (
+            self.get_clock().now() -
+            self._rear_scan_stamp
+        ).nanoseconds * 1e-9
+
+        if age > self.rear_scan_timeout:
+            if self.rear_fail_closed:
+                return 'rear_scan stale (%.2fs old)' % age
+            return None
+
+        if (
+            self._rear_near is not None
+            and self._rear_near <= self.rear_stop_distance
+        ):
+            return (
+                'rear obstacle %.2fm behind'
+                % self._rear_near
+            )
+
+        return None
+
+
     def _safety_w(self, v, w_in):
         av = abs(v)
 
@@ -260,7 +365,18 @@ class CmdVelLimiter(Node):
         # Nav2 may make a bad decision; this layer still stops.
         # ---------------------------------------------------------
 
-        stop_reason = self._front_guard_reason(v)
+        front_reason = self._front_guard_reason(v)
+        rear_reason = self._rear_guard_reason(v)
+
+        if front_reason is not None:
+            stop_reason = front_reason
+            stop_direction = 'FRONT'
+        elif rear_reason is not None:
+            stop_reason = rear_reason
+            stop_direction = 'REAR'
+        else:
+            stop_reason = None
+            stop_direction = None
 
         if stop_reason is not None:
             self._last_w = 0.0
@@ -276,8 +392,8 @@ class CmdVelLimiter(Node):
                 or now_sec - self._last_stop_log_time >= 1.0
             ):
                 self.get_logger().warn(
-                    'HARD FRONT STOP: ' +
-                    stop_reason)
+                    'HARD %s STOP: %s'
+                    % (stop_direction, stop_reason))
 
                 self._last_stop_log_time = now_sec
 
@@ -286,7 +402,7 @@ class CmdVelLimiter(Node):
 
         if self._hard_stop_active:
             self.get_logger().info(
-                'HARD FRONT STOP cleared')
+                'HARD SAFETY STOP cleared')
 
             self._hard_stop_active = False
 
