@@ -284,7 +284,55 @@
         <frame_name>depth_camera</frame_name>
       </plugin>
     </sensor>
+
+    <!-- ============================================================= -->
+    <!-- TRUE FRONT TERRAIN DEPTH CAMERA                               -->
+    <!--                                                               -->
+    <!-- Lightweight 3D sensing for curbs, low obstacles, ramps,      -->
+    <!-- bumps and later drop-off / terrain analysis.                  -->
+    <!--                                                               -->
+    <!-- Keep the existing front_depth ray sensor above. It remains   -->
+    <!-- the cheap proximity source used by the local costmap.         -->
+    <!-- ============================================================= -->
+    <sensor name="front_terrain" type="depth">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <visualize>false</visualize>
+
+      <camera name="front_terrain">
+        <horizontal_fov>1.22173</horizontal_fov>
+
+        <image>
+          <width>320</width>
+          <height>240</height>
+          <format>R8G8B8</format>
+        </image>
+
+        <clip>
+          <near>0.15</near>
+          <far>4.0</far>
+        </clip>
+      </camera>
+
+      <plugin
+        name="front_terrain_depth_controller"
+        filename="libgazebo_ros_camera.so">
+
+        <ros>
+          <namespace>/etrike</namespace>
+        </ros>
+
+        <camera_name>front_terrain</camera_name>
+        <frame_name>depth_camera_optical</frame_name>
+
+        <pointCloudCutoff>0.15</pointCloudCutoff>
+        <pointCloudCutoffMax>4.0</pointCloudCutoffMax>
+
+      </plugin>
+    </sensor>
+
   </gazebo>
+
   <gazebo reference="front_lidar_link">
     <sensor name="front_lidar" type="ray">
       <always_on>true</always_on>
