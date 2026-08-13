@@ -1,0 +1,46 @@
+terrain_detector:
+  ros__parameters:
+
+    # Front terrain depth camera
+    depth_topic: /etrike/front_terrain/depth/image_raw
+    camera_info_topic: /etrike/front_terrain/depth/camera_info
+    base_frame: base_link
+
+    # Processing
+    process_hz: 5.0
+
+    # Forward terrain region
+    x_min: 1.30
+    x_max: 4.00
+    fit_half_width: 1.25
+    corridor_half_width: 0.70
+
+    # Ground plane is anchored to near-field road ahead.
+    ground_fit_x_max: 2.10
+
+    # Positive terrain:
+    # low obstacles / curbs / bumps
+    positive_threshold: 0.035
+    positive_min_points: 100
+
+    # Negative terrain:
+    # drop-offs / holes / unexpectedly lower surfaces
+    negative_threshold: -0.08
+    negative_min_points: 100
+
+    # Missing expected-ground support
+    ground_support_tolerance: 0.03
+    profile_bin_size: 0.10
+    profile_min_points: 20
+    support_min_points: 30
+    missing_bins_required: 2
+    missing_only_max_start: 2.80
+
+    # Continuous slope classification
+    slope_min_grade_percent: 3.0
+    slope_max_normal_grade_percent: 12.0
+
+    # Validated:
+    # 8% ramp RMSE ~0.055 cm -> SLOPE
+    # 8 cm bump RMSE ~1.30 cm -> POSITIVE_OBSTACLE
+    slope_fit_max_rmse: 0.005

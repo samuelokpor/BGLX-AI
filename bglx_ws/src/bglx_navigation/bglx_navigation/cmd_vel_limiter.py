@@ -20,6 +20,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Bool
 
 
 def clamp(x, lo, hi):
@@ -70,6 +71,21 @@ class CmdVelLimiter(Node):
             'fail_closed_on_rear_scan_loss',
             True)
 
+        # Independent forward terrain safety guard.
+        #
+        # Terrain hazards restrict forward motion only so the
+        # vehicle retains the ability to reverse away from a
+        # curb, drop-off, low obstacle, or unsafe slope.
+        self.declare_parameter(
+            'terrain_hazard_topic',
+            '/etrike/terrain/hazard')
+        self.declare_parameter(
+            'terrain_hazard_timeout',
+            0.60)
+        self.declare_parameter(
+            'fail_closed_on_terrain_loss',
+            True)
+
         gp = self.get_parameter
 
         self.L = float(gp('wheelbase').value)
@@ -114,6 +130,13 @@ class CmdVelLimiter(Node):
         self.rear_fail_closed = bool(
             gp('fail_closed_on_rear_scan_loss').value)
 
+        self.terrain_hazard_topic = gp(
+            'terrain_hazard_topic').value
+        self.terrain_hazard_timeout = float(
+            gp('terrain_hazard_timeout').value)
+        self.terrain_fail_closed = bool(
+            gp('fail_closed_on_terrain_loss').value)
+
         self.pub = self.create_publisher(
             Twist,
             out_topic,
@@ -137,6 +160,12 @@ class CmdVelLimiter(Node):
             self.on_rear_scan,
             qos_profile_sensor_data)
 
+        self.terrain_hazard_sub = self.create_subscription(
+            Bool,
+            self.terrain_hazard_topic,
+            self.on_terrain_hazard,
+            10)
+
         self._tgt_v = 0.0
         self._tgt_w = 0.0
         self._last_w = 0.0
@@ -147,6 +176,9 @@ class CmdVelLimiter(Node):
 
         self._rear_near = None
         self._rear_scan_stamp = None
+
+        self._terrain_hazard = None
+        self._terrain_hazard_stamp = None
 
         self._hard_stop_active = False
         self._last_stop_log_time = -1e9
@@ -308,6 +340,52 @@ class CmdVelLimiter(Node):
         return None
 
 
+    def on_terrain_hazard(self, msg: Bool):
+        """
+        Cache the latest terrain hazard decision.
+
+        Bool has no header, so freshness is measured from the
+        local receive time.
+        """
+        self._terrain_hazard = bool(msg.data)
+        self._terrain_hazard_stamp = self.get_clock().now()
+
+
+    def _terrain_guard_reason(self, v):
+        """
+        Return a reason if forward movement must be stopped by
+        terrain perception.
+
+        Terrain state never blocks reverse escape.
+        """
+
+        if v <= 0.0:
+            return None
+
+        if self._terrain_hazard_stamp is None:
+            if self.terrain_fail_closed:
+                return 'no terrain hazard state received yet'
+            return None
+
+        age = (
+            self.get_clock().now() -
+            self._terrain_hazard_stamp
+        ).nanoseconds * 1e-9
+
+        if age > self.terrain_hazard_timeout:
+            if self.terrain_fail_closed:
+                return (
+                    'terrain hazard state stale '
+                    '(%.2fs old)' % age
+                )
+            return None
+
+        if self._terrain_hazard:
+            return 'terrain hazard reported'
+
+        return None
+
+
     def _safety_w(self, v, w_in):
         av = abs(v)
 
@@ -366,11 +444,15 @@ class CmdVelLimiter(Node):
         # ---------------------------------------------------------
 
         front_reason = self._front_guard_reason(v)
+        terrain_reason = self._terrain_guard_reason(v)
         rear_reason = self._rear_guard_reason(v)
 
         if front_reason is not None:
             stop_reason = front_reason
             stop_direction = 'FRONT'
+        elif terrain_reason is not None:
+            stop_reason = terrain_reason
+            stop_direction = 'TERRAIN'
         elif rear_reason is not None:
             stop_reason = rear_reason
             stop_direction = 'REAR'

@@ -18,6 +18,9 @@ def generate_launch_description():
     collision_params = os.path.join(
         pkg, 'config', 'collision_monitor.yaml'
     )
+    terrain_params = os.path.join(
+        pkg, 'config', 'terrain_detector.yaml'
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     params_file = LaunchConfiguration('params_file')
@@ -95,6 +98,21 @@ def generate_launch_description():
                 {'use_sim_time': use_sim_time},
                 {'autostart': True},
                 {'node_names': ['collision_monitor']},
+            ],
+        ),
+
+        # Front depth-camera terrain perception.
+        #
+        # Publishes /etrike/terrain/hazard for the final
+        # direction-specific terrain gate in cmd_vel_limiter.
+        Node(
+            package='bglx_navigation',
+            executable='terrain_detector',
+            name='terrain_detector',
+            output='screen',
+            parameters=[
+                terrain_params,
+                {'use_sim_time': use_sim_time},
             ],
         ),
 

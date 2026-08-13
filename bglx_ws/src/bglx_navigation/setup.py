@@ -28,6 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'cmd_vel_limiter = bglx_navigation.cmd_vel_limiter:main',
+            'terrain_detector = bglx_navigation.terrain_detector:main',
         ],
     },
 )
