@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.actions import TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -71,12 +72,17 @@ def generate_launch_description():
             ],
         ),
 
-        Node(
-            package='nav2_lifecycle_manager', executable='lifecycle_manager',
-            name='lifecycle_manager_navigation', output='screen',
-            parameters=[{'use_sim_time': use_sim_time},
-                        {'autostart': True},
-                        {'node_names': lifecycle_nodes}],
+        TimerAction(
+            period=5.0,
+            actions=[
+                Node(
+                    package='nav2_lifecycle_manager', executable='lifecycle_manager',
+                    name='lifecycle_manager_navigation', output='screen',
+                    parameters=[{'use_sim_time': use_sim_time},
+                                {'autostart': True},
+                                {'node_names': lifecycle_nodes}],
+                ),
+            ],
         ),
 
         # Dedicated lifecycle manager for the independent collision-safety layer.
