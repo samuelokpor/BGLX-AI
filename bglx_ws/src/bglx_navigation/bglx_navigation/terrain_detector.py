@@ -1583,6 +1583,8 @@ class TerrainDetector(Node):
         )
 
         positive_height_cm = None
+        positive_x_span_m = None
+        positive_equivalent_grade_percent = None
 
         if positive_count:
 
@@ -1592,6 +1594,40 @@ class TerrainDetector(Node):
                     95
                 ) * 100.0
             )
+
+            positive_x_values = x[positive]
+
+            if len(positive_x_values) >= 2:
+
+                positive_x_span_m = float(
+                    np.percentile(
+                        positive_x_values,
+                        95
+                    ) -
+                    np.percentile(
+                        positive_x_values,
+                        5
+                    )
+                )
+
+                # Approximate how abrupt the positive feature is.
+                #
+                # Long ramps:
+                #   modest rise / long x span -> low equivalent grade.
+                #
+                # Walls / curbs:
+                #   large rise / short x span -> very high equivalent grade.
+                positive_equivalent_grade_percent = (
+                    100.0 *
+                    (
+                        positive_height_cm /
+                        100.0
+                    ) /
+                    max(
+                        positive_x_span_m,
+                        0.05
+                    )
+                )
 
         negative_depth_cm = None
 
@@ -1703,7 +1739,32 @@ class TerrainDetector(Node):
                 )
                 slope_rmse_cm = 0.0
 
-            if slope_detected:
+            strong_positive_override = (
+                positive_count >=
+                self.positive_min_points and
+                positive_height_cm is not None and
+                positive_height_cm >= 8.0 and
+                positive_equivalent_grade_percent
+                is not None and
+                positive_equivalent_grade_percent >
+                (
+                    1.5 *
+                    self.slope_max_normal_grade_percent
+                )
+            )
+
+            if strong_positive_override:
+
+                # A compact abrupt positive rise must not be
+                # accepted as an ordinary traversable slope.
+                #
+                # This catches walls / curbs even if the
+                # profile slope fitter happens to return a
+                # low-RMSE line through the feature.
+                state = 'POSITIVE_OBSTACLE'
+                hazard = True
+
+            elif slope_detected:
 
                 if (
                     abs(slope_grade) >
