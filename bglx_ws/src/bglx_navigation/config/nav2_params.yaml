@@ -70,7 +70,7 @@ local_costmap:
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
-        observation_sources: scan front_scan front_prox left_prox right_prox rear_prox
+        observation_sources: scan front_scan front_prox left_prox right_prox rear_prox terrain_scan
         front_scan:
           topic: /etrike/front_scan
           data_type: LaserScan
@@ -137,6 +137,24 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 1.5
           obstacle_min_range: 0.0
+        terrain_scan:
+          topic: /etrike/terrain/scan
+          data_type: LaserScan
+
+          # Persistent terrain memory is marking-only here.
+          # Ordinary obstacle sources clear first; this
+          # terrain observation then re-marks the remembered
+          # hazard in the same ObstacleLayer.
+          marking: true
+          clearing: false
+          inf_is_valid: false
+
+          min_obstacle_height: -0.5
+          max_obstacle_height: 2.0
+
+          obstacle_min_range: 0.30
+          obstacle_max_range: 3.80
+
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 2.5
@@ -157,6 +175,7 @@ global_costmap:
       plugins:
       - static_layer
       - obstacle_layer
+      - terrain_layer
       - inflation_layer
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
@@ -191,6 +210,38 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.0
+      terrain_layer:
+        plugin: nav2_costmap_2d::ObstacleLayer
+        enabled: true
+        combination_method: 1
+        observation_sources: terrain_scan
+
+        terrain_scan:
+          topic: /etrike/terrain/scan
+          data_type: LaserScan
+
+          marking: true
+          clearing: true
+          inf_is_valid: true
+
+          min_obstacle_height: -0.5
+          max_obstacle_height: 2.0
+
+          obstacle_min_range: 0.30
+
+          # IMPORTANT:
+          # Real terrain returns may mark obstacles only inside
+          # 3.80 m. Synthetic +inf beams project near range_max
+          # (~4.20 m) and are used ONLY for clearing.
+          #
+          # Keeping a clear separation between obstacle and
+          # raytrace range prevents a false circular obstacle
+          # from being marked around the robot.
+          obstacle_max_range: 3.80
+
+          raytrace_min_range: 0.0
+          raytrace_max_range: 4.20
+
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 1.0
@@ -214,7 +265,7 @@ planner_server:
       motion_model_for_search: "DUBIN"
       angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
-      analytic_expansion_max_length: 3.0
+      analytic_expansion_max_length: 5.0
       minimum_turning_radius: 1.0
       reverse_penalty: 2.0
       change_penalty: 3.0

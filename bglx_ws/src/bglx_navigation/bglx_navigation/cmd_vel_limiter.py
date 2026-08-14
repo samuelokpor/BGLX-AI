@@ -78,7 +78,7 @@ class CmdVelLimiter(Node):
         # curb, drop-off, low obstacle, or unsafe slope.
         self.declare_parameter(
             'terrain_hazard_topic',
-            '/etrike/terrain/hazard')
+            '/etrike/terrain/hard_stop')
         self.declare_parameter(
             'terrain_hazard_timeout',
             0.60)

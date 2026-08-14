@@ -9,8 +9,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
-from sensor_msgs.msg import Image, CameraInfo
-from std_msgs.msg import Bool, String
+from sensor_msgs.msg import Image, CameraInfo, LaserScan
+from std_msgs.msg import Bool, String, Float32
 from tf2_ros import Buffer, TransformListener
 
 
@@ -106,6 +106,15 @@ class TerrainDetector(Node):
         self.declare_parameter(
             'positive_min_points',
             100
+        )
+
+        # Emergency terrain envelope measured from base_link.
+        #
+        # Planning hazards may be observed farther away. Only hazards
+        # inside this distance receive immediate motion authority.
+        self.declare_parameter(
+            'hard_stop_distance',
+            2.00
         )
 
         # --------------------------------------------------------------
@@ -225,6 +234,12 @@ class TerrainDetector(Node):
             'positive_min_points'
         ).value
 
+        self.hard_stop_distance = float(
+            self.get_parameter(
+                'hard_stop_distance'
+            ).value
+        )
+
         self.negative_threshold = self.get_parameter(
             'negative_threshold'
         ).value
@@ -315,6 +330,33 @@ class TerrainDetector(Node):
             10
         )
 
+        # Immediate emergency terrain decision.
+        #
+        # Unlike /etrike/terrain/hazard, this becomes true only when
+        # hazardous terrain enters the hard-stop envelope.
+        self.hard_stop_pub = self.create_publisher(
+            Bool,
+            '/etrike/terrain/hard_stop',
+            10
+        )
+
+        self.hazard_distance_pub = self.create_publisher(
+            Float32,
+            '/etrike/terrain/hazard_distance',
+            10
+        )
+
+        # Compact 2D terrain representation for Nav2.
+        #
+        # This is deliberately NOT the raw depth cloud.
+        # It contains only terrain geometry relevant to
+        # navigation.
+        self.terrain_scan_pub = self.create_publisher(
+            LaserScan,
+            '/etrike/terrain/scan',
+            qos_profile_sensor_data
+        )
+
         period = 1.0 / max(
             0.5,
             float(self.process_hz)
@@ -327,6 +369,40 @@ class TerrainDetector(Node):
 
         self.last_state = None
         self.last_tf_warning = 0.0
+
+        # ----------------------------------------------------------
+        # Persistent terrain memory.
+        #
+        # Hazards are remembered in odom coordinates so they do not
+        # disappear simply because the front depth camera turns away.
+        # ----------------------------------------------------------
+
+        self.declare_parameter(
+            'terrain_memory_timeout',
+            30.0
+        )
+
+        self.declare_parameter(
+            'terrain_memory_passed_x',
+            -0.50
+        )
+
+        self.terrain_memory_timeout = float(
+            self.get_parameter(
+                'terrain_memory_timeout'
+            ).value
+        )
+
+        self.terrain_memory_passed_x = float(
+            self.get_parameter(
+                'terrain_memory_passed_x'
+            ).value
+        )
+
+        self.terrain_memory_frame = 'odom'
+        self.terrain_memory_points = None
+        self.terrain_memory_stamp_ns = None
+        self.terrain_memory_state = None
 
         self.get_logger().info(
             'Terrain detector started '
@@ -734,6 +810,558 @@ class TerrainDetector(Node):
     # Publish
     # ------------------------------------------------------------------
 
+    def _terrain_yaw(
+        self,
+        quaternion
+    ):
+        return math.atan2(
+            2.0 * (
+                quaternion.w *
+                quaternion.z +
+                quaternion.x *
+                quaternion.y
+            ),
+            1.0 - 2.0 * (
+                quaternion.y *
+                quaternion.y +
+                quaternion.z *
+                quaternion.z
+            )
+        )
+
+
+    def _transform_terrain_points(
+        self,
+        points,
+        target_frame,
+        source_frame
+    ):
+
+        if (
+            points is None or
+            len(points) == 0
+        ):
+            return np.empty(
+                (0, 2),
+                dtype=np.float64
+            )
+
+        tf = self.tf_buffer.lookup_transform(
+            target_frame,
+            source_frame,
+            rclpy.time.Time()
+        )
+
+        yaw = self._terrain_yaw(
+            tf.transform.rotation
+        )
+
+        c = math.cos(yaw)
+        s = math.sin(yaw)
+
+        x = points[:, 0]
+        y = points[:, 1]
+
+        tx = tf.transform.translation.x
+        ty = tf.transform.translation.y
+
+        out_x = (
+            tx +
+            c * x -
+            s * y
+        )
+
+        out_y = (
+            ty +
+            s * x +
+            c * y
+        )
+
+        return np.column_stack(
+            (
+                out_x,
+                out_y
+            )
+        )
+
+
+    def _compress_terrain_points(
+        self,
+        points
+    ):
+
+        if (
+            points is None or
+            len(points) == 0
+        ):
+            return np.empty(
+                (0, 2),
+                dtype=np.float64
+            )
+
+        points = np.asarray(
+            points,
+            dtype=np.float64
+        )
+
+        valid = np.isfinite(
+            points
+        ).all(axis=1)
+
+        points = points[valid]
+
+        if len(points) == 0:
+            return points
+
+        # One representative point per 5 cm cell.
+        keys = np.round(
+            points / 0.05
+        ).astype(np.int64)
+
+        _, indices = np.unique(
+            keys,
+            axis=0,
+            return_index=True
+        )
+
+        return points[
+            np.sort(indices)
+        ]
+
+
+    def _current_hazard_geometry(
+        self,
+        state,
+        x,
+        y,
+        positive_mask,
+        negative_mask,
+        support_gap
+    ):
+
+        # ------------------------------------------------------
+        # Positive obstacle / steep terrain:
+        # remember detected raised terrain points.
+        # ------------------------------------------------------
+
+        if state in (
+            'POSITIVE_OBSTACLE',
+            'STEEP_SLOPE'
+        ):
+
+            px = x[positive_mask]
+            py = y[positive_mask]
+
+            if len(px) == 0:
+                return np.empty(
+                    (0, 2),
+                    dtype=np.float64
+                )
+
+            return self._compress_terrain_points(
+                np.column_stack(
+                    (
+                        px,
+                        py
+                    )
+                )
+            )
+
+
+        # ------------------------------------------------------
+        # Negative terrain:
+        # remember a virtual barrier at the detected drop edge.
+        # ------------------------------------------------------
+
+        if state == 'NEGATIVE_TERRAIN':
+
+            edge = support_gap.get(
+                'edge_m'
+            )
+
+            if (
+                edge is None and
+                np.count_nonzero(
+                    negative_mask
+                ) > 0
+            ):
+                edge = float(
+                    np.percentile(
+                        x[negative_mask],
+                        1
+                    )
+                )
+
+            if (
+                edge is None or
+                edge <= 0.0
+            ):
+                return np.empty(
+                    (0, 2),
+                    dtype=np.float64
+                )
+
+            ys = np.arange(
+                -self.fit_half_width,
+                self.fit_half_width + 0.05,
+                0.10
+            )
+
+            xs = np.full(
+                len(ys),
+                float(edge),
+                dtype=np.float64
+            )
+
+            return np.column_stack(
+                (
+                    xs,
+                    ys
+                )
+            )
+
+
+        return np.empty(
+            (0, 2),
+            dtype=np.float64
+        )
+
+
+    def _update_terrain_memory(
+        self,
+        state,
+        points_base
+    ):
+
+        if (
+            points_base is None or
+            len(points_base) == 0
+        ):
+            return
+
+        try:
+
+            points_odom = (
+                self._transform_terrain_points(
+                    points_base,
+                    self.terrain_memory_frame,
+                    self.base_frame
+                )
+            )
+
+        except Exception as exc:
+
+            now = time.monotonic()
+
+            if (
+                now -
+                self.last_tf_warning >
+                2.0
+            ):
+                self.get_logger().warning(
+                    'Terrain memory TF '
+                    f'base -> odom failed: {exc}'
+                )
+
+                self.last_tf_warning = now
+
+            return
+
+
+        self.terrain_memory_points = (
+            self._compress_terrain_points(
+                points_odom
+            )
+        )
+
+        self.terrain_memory_stamp_ns = (
+            self.get_clock().
+            now().
+            nanoseconds
+        )
+
+        self.terrain_memory_state = state
+
+
+    def _terrain_memory_base_points(
+        self
+    ):
+
+        if (
+            self.terrain_memory_points
+            is None or
+            len(
+                self.terrain_memory_points
+            ) == 0
+        ):
+            return np.empty(
+                (0, 2),
+                dtype=np.float64
+            )
+
+
+        # ------------------------------------------------------
+        # Timeout old memory.
+        # ------------------------------------------------------
+
+        if (
+            self.terrain_memory_stamp_ns
+            is not None
+        ):
+
+            age = (
+                self.get_clock().
+                now().
+                nanoseconds -
+                self.terrain_memory_stamp_ns
+            ) * 1.0e-9
+
+            if (
+                age >
+                self.terrain_memory_timeout
+            ):
+
+                self.get_logger().info(
+                    'Terrain memory expired'
+                )
+
+                self.terrain_memory_points = None
+                self.terrain_memory_stamp_ns = None
+                self.terrain_memory_state = None
+
+                return np.empty(
+                    (0, 2),
+                    dtype=np.float64
+                )
+
+
+        # ------------------------------------------------------
+        # Transform remembered odom geometry into current
+        # base_link coordinates.
+        # ------------------------------------------------------
+
+        try:
+
+            points_base = (
+                self._transform_terrain_points(
+                    self.terrain_memory_points,
+                    self.base_frame,
+                    self.terrain_memory_frame
+                )
+            )
+
+        except Exception:
+            return np.empty(
+                (0, 2),
+                dtype=np.float64
+            )
+
+
+        # ------------------------------------------------------
+        # Once the entire remembered hazard is safely behind
+        # the robot, forget it.
+        # ------------------------------------------------------
+
+        if (
+            len(points_base) > 0 and
+            np.all(
+                points_base[:, 0] <
+                self.terrain_memory_passed_x
+            )
+        ):
+
+            self.get_logger().info(
+                'Terrain memory cleared: '
+                'hazard passed'
+            )
+
+            self.terrain_memory_points = None
+            self.terrain_memory_stamp_ns = None
+            self.terrain_memory_state = None
+
+            return np.empty(
+                (0, 2),
+                dtype=np.float64
+            )
+
+
+        return points_base
+
+
+    def publish_terrain_scan(
+        self,
+        state,
+        x,
+        y,
+        relative_height,
+        positive_mask,
+        negative_mask,
+        support_gap
+    ):
+        """
+        Publish a persistent synthetic 360-degree LaserScan.
+
+        Fresh terrain is converted to odom-fixed geometry.
+        If the front camera loses sight of the hazard while the
+        robot turns, the remembered obstacle remains in the scan.
+        """
+
+        fresh_points = (
+            self._current_hazard_geometry(
+                state,
+                x,
+                y,
+                positive_mask,
+                negative_mask,
+                support_gap
+            )
+        )
+
+        if len(fresh_points) > 0:
+
+            self._update_terrain_memory(
+                state,
+                fresh_points
+            )
+
+
+        memory_points = (
+            self._terrain_memory_base_points()
+        )
+
+
+        msg = LaserScan()
+
+        msg.header.stamp = (
+            self.get_clock().
+            now().
+            to_msg()
+        )
+
+        msg.header.frame_id = (
+            self.base_frame
+        )
+
+
+        # ------------------------------------------------------
+        # Full synthetic 360-degree scan.
+        # ------------------------------------------------------
+
+        msg.angle_min = -math.pi
+        msg.angle_max = math.pi
+
+        msg.angle_increment = (
+            math.radians(
+                1.0
+            )
+        )
+
+        count = int(
+            round(
+                (
+                    msg.angle_max -
+                    msg.angle_min
+                ) /
+                msg.angle_increment
+            )
+        ) + 1
+
+        msg.angle_max = (
+            msg.angle_min +
+            (
+                count - 1
+            ) *
+            msg.angle_increment
+        )
+
+        msg.time_increment = 0.0
+
+        msg.scan_time = (
+            1.0 /
+            max(
+                0.5,
+                float(
+                    self.process_hz
+                )
+            )
+        )
+
+        msg.range_min = 0.30
+        msg.range_max = 4.20
+
+
+        ranges = np.full(
+            count,
+            np.inf,
+            dtype=np.float32
+        )
+
+
+        for point in memory_points:
+
+            px = float(
+                point[0]
+            )
+
+            py = float(
+                point[1]
+            )
+
+            distance = math.hypot(
+                px,
+                py
+            )
+
+            if (
+                distance <
+                msg.range_min or
+                distance >
+                msg.range_max
+            ):
+                continue
+
+
+            angle = math.atan2(
+                py,
+                px
+            )
+
+            index = int(
+                round(
+                    (
+                        angle -
+                        msg.angle_min
+                    ) /
+                    msg.angle_increment
+                )
+            )
+
+            if not (
+                0 <= index < count
+            ):
+                continue
+
+
+            if (
+                distance <
+                ranges[index]
+            ):
+                ranges[index] = float(
+                    distance
+                )
+
+
+        msg.ranges = (
+            ranges.tolist()
+        )
+
+        msg.intensities = []
+
+        self.terrain_scan_pub.publish(
+            msg
+        )
+
+
     def publish_status(
         self,
         state,
@@ -1101,7 +1729,97 @@ class TerrainDetector(Node):
                 state = 'CLEAR'
                 hazard = False
 
+        # --------------------------------------------------------------
+        # Separate planning hazard from emergency hard-stop authority.
+        # --------------------------------------------------------------
+
+        hazard_distance = None
+
+        if state == 'NEGATIVE_TERRAIN':
+
+            hazard_distance = support_gap.get(
+                'edge_m'
+            )
+
+            if (
+                hazard_distance is None and
+                negative_count > 0
+            ):
+                hazard_distance = float(
+                    np.percentile(
+                        x[negative],
+                        1
+                    )
+                )
+
+        elif state == 'POSITIVE_OBSTACLE':
+
+            if positive_count > 0:
+                hazard_distance = float(
+                    np.percentile(
+                        x[positive],
+                        1
+                    )
+                )
+
+        elif state == 'STEEP_SLOPE':
+
+            # Conservative fallback until explicit slope-extent
+            # estimation is added.
+            if positive_count > 0:
+                hazard_distance = float(
+                    np.percentile(
+                        x[positive],
+                        1
+                    )
+                )
+
+        hard_stop = False
+
+        if state == 'GROUND_FIT_FAILED':
+            hard_stop = True
+
+        elif (
+            hazard and
+            hazard_distance is not None and
+            hazard_distance <= self.hard_stop_distance
+        ):
+            hard_stop = True
+
+        hard_msg = Bool()
+        hard_msg.data = bool(hard_stop)
+        self.hard_stop_pub.publish(hard_msg)
+
+        distance_msg = Float32()
+        distance_msg.data = (
+            float(hazard_distance)
+            if hazard_distance is not None
+            else float('nan')
+        )
+        self.hazard_distance_pub.publish(
+            distance_msg
+        )
+
+        self.publish_terrain_scan(
+            state,
+            x,
+            y,
+            relative_height,
+            positive,
+            negative,
+            support_gap
+        )
+
         details = {
+            'hard_stop':
+                bool(hard_stop),
+
+            'hazard_distance_m':
+                hazard_distance,
+
+            'hard_stop_distance_m':
+                self.hard_stop_distance,
+
             'positive_points':
                 positive_count,
 

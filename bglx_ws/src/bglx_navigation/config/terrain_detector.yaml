@@ -9,6 +9,10 @@ terrain_detector:
     # Processing
     process_hz: 5.0
 
+    # Persistent terrain memory for maneuvering
+    terrain_memory_timeout: 30.0
+    terrain_memory_passed_x: -0.50
+
     # Forward terrain region
     x_min: 1.30
     x_max: 4.00
@@ -22,6 +26,10 @@ terrain_detector:
     # low obstacles / curbs / bumps
     positive_threshold: 0.035
     positive_min_points: 100
+
+    # Provisional simulation emergency envelope.
+    # Tune from measured braking performance on hardware.
+    hard_stop_distance: 2.00
 
     # Negative terrain:
     # drop-offs / holes / unexpectedly lower surfaces

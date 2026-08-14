@@ -88,23 +88,31 @@ def generate_launch_description():
             ],
         ),
 
-        # Dedicated lifecycle manager for the independent collision-safety layer.
-        Node(
-            package='nav2_lifecycle_manager',
-            executable='lifecycle_manager',
-            name='lifecycle_manager_collision_monitor',
-            output='screen',
-            parameters=[
-                {'use_sim_time': use_sim_time},
-                {'autostart': True},
-                {'node_names': ['collision_monitor']},
+        # Dedicated lifecycle manager for the independent collision-safety
+        # layer. Give collision_monitor time to create its lifecycle services
+        # before the manager begins configure -> activate transitions.
+        TimerAction(
+            period=2.0,
+            actions=[
+                Node(
+                    package='nav2_lifecycle_manager',
+                    executable='lifecycle_manager',
+                    name='lifecycle_manager_collision_monitor',
+                    output='screen',
+                    parameters=[
+                        {'use_sim_time': use_sim_time},
+                        {'autostart': True},
+                        {'node_names': ['collision_monitor']},
+                    ],
+                ),
             ],
         ),
 
         # Front depth-camera terrain perception.
         #
-        # Publishes /etrike/terrain/hazard for the final
-        # direction-specific terrain gate in cmd_vel_limiter.
+        # Publishes terrain planning information plus
+        # /etrike/terrain/hard_stop for the final independent
+        # terrain gate in cmd_vel_limiter.
         Node(
             package='bglx_navigation',
             executable='terrain_detector',
