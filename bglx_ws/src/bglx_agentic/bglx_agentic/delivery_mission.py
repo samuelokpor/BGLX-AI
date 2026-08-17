@@ -46,6 +46,16 @@ class DeliveryMission(Node):
             3.0
         )
 
+        self.declare_parameter(
+            'max_leg_attempts',
+            2
+        )
+
+        self.declare_parameter(
+            'retry_delay',
+            2.0
+        )
+
         # --------------------------------------------------
         # Validated Oxford mission coordinates.
         #
@@ -115,6 +125,20 @@ class DeliveryMission(Node):
 
         self.delivery_dwell = float(
             gp('delivery_dwell').value
+        )
+
+        self.max_leg_attempts = max(
+            1,
+            int(
+                gp('max_leg_attempts').value
+            )
+        )
+
+        self.retry_delay = max(
+            0.0,
+            float(
+                gp('retry_delay').value
+            )
         )
 
         self.home = (
@@ -415,6 +439,69 @@ class DeliveryMission(Node):
         return False
 
     # ======================================================
+    # Navigate with controlled retry
+    # ======================================================
+
+    def navigate_with_retry(
+        self,
+        destination_name,
+        waypoint
+    ):
+
+        for attempt in range(
+            1,
+            self.max_leg_attempts + 1
+        ):
+
+            print()
+            print(
+                'ATTEMPT %d/%d: %s'
+                % (
+                    attempt,
+                    self.max_leg_attempts,
+                    destination_name,
+                )
+            )
+
+            if self.navigate(
+                destination_name,
+                waypoint
+            ):
+                return True
+
+            if (
+                attempt
+                < self.max_leg_attempts
+            ):
+
+                self.set_state(
+                    'RETRYING_%s'
+                    % destination_name
+                )
+
+                print(
+                    'Retrying %s in %.1f seconds...'
+                    % (
+                        destination_name,
+                        self.retry_delay,
+                    )
+                )
+
+                time.sleep(
+                    self.retry_delay
+                )
+
+        print(
+            'FAIL: %s exhausted %d attempt(s)'
+            % (
+                destination_name,
+                self.max_leg_attempts,
+            )
+        )
+
+        return False
+
+    # ======================================================
     # Parcel operation
     # ======================================================
 
@@ -519,7 +606,7 @@ class DeliveryMission(Node):
             'NAVIGATING_TO_PICKUP'
         )
 
-        if not self.navigate(
+        if not self.navigate_with_retry(
             'PICKUP_A',
             self.pickup
         ):
@@ -564,7 +651,7 @@ class DeliveryMission(Node):
             'NAVIGATING_TO_DELIVERY'
         )
 
-        if not self.navigate(
+        if not self.navigate_with_retry(
             'DELIVERY_A',
             self.delivery
         ):
@@ -609,7 +696,7 @@ class DeliveryMission(Node):
             'RETURNING_HOME'
         )
 
-        if not self.navigate(
+        if not self.navigate_with_retry(
             'HOME',
             self.home
         ):
