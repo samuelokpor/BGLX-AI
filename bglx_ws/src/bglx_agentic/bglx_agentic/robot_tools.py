@@ -15,6 +15,7 @@ The agent sees only the public methods, and they return English.
 
 import math
 import os
+import signal
 import subprocess
 import threading
 import time
@@ -33,6 +34,7 @@ from geometry_msgs.msg import Twist, Quaternion
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from sensor_msgs.msg import LaserScan, Image
+from std_msgs.msg import String
 from nav2_msgs.action import NavigateToPose
 
 import tf2_ros
@@ -130,6 +132,12 @@ class RobotTools(Node):
         self._lock = threading.Lock()
         self._last_failure = "No navigation attempted yet."
 
+        # Asynchronous deterministic delivery mission.
+        self._mission_proc = None
+        self._mission_state = 'IDLE'
+        self._mission_route = None
+        self._mission_started_at = None
+
         self.create_subscription(LaserScan, scan_topic, self._on_scan,
                                  SENSOR_QOS, callback_group=self.cb_group)
         self.create_subscription(
@@ -146,6 +154,13 @@ class RobotTools(Node):
                                  callback_group=self.cb_group)
         self.create_subscription(Path, '/plan', self._on_plan, 1,
                                  callback_group=self.cb_group)
+        self.create_subscription(
+            String,
+            '/bglx/mission/state',
+            self._on_mission_state,
+            10,
+            callback_group=self.cb_group
+        )
         # The saved map, and how confident AMCL is that we are where we think.
         self.create_subscription(OccupancyGrid, '/map', self._on_static_map,
                                  MAP_QOS, callback_group=self.cb_group)
@@ -168,6 +183,11 @@ class RobotTools(Node):
             % (scan_topic, odom_topic, cmd_vel_topic))
 
     # --- callbacks ---------------------------------------------------------
+
+    def _on_mission_state(self, msg):
+        with self._lock:
+            self._mission_state = str(msg.data)
+
     def _on_scan(self, msg):
         with self._lock:
             self._scan = msg
@@ -926,17 +946,190 @@ class RobotTools(Node):
             + ", ".join(names)
         )
 
+    def mission_active(self):
+        """True while the deterministic mission process is alive."""
+
+        proc = self._mission_proc
+
+        return (
+            proc is not None
+            and proc.poll() is None
+        )
+
+    def get_mission_status(self):
+        """Report live deterministic delivery mission state."""
+
+        proc = self._mission_proc
+
+        with self._lock:
+            state = self._mission_state
+            route = self._mission_route
+            started = self._mission_started_at
+
+        if proc is None:
+
+            return (
+                "MISSION STATUS: IDLE. "
+                "No delivery mission has been started "
+                "by this agent process."
+            )
+
+        code = proc.poll()
+
+        if route is None:
+            route_text = "unknown route"
+        else:
+            route_text = (
+                "HOME -> %s -> %s -> HOME"
+                % route
+            )
+
+        elapsed = None
+
+        if started is not None:
+            elapsed = max(
+                0.0,
+                time.time() - started
+            )
+
+        if code is None:
+
+            if elapsed is None:
+                return (
+                    "MISSION STATUS: ACTIVE. "
+                    "state=%s, route=%s."
+                    % (
+                        state,
+                        route_text,
+                    )
+                )
+
+            return (
+                "MISSION STATUS: ACTIVE. "
+                "state=%s, route=%s, elapsed=%.1fs."
+                % (
+                    state,
+                    route_text,
+                    elapsed,
+                )
+            )
+
+        if (
+            code == 0
+            and state == 'MISSION_COMPLETE'
+        ):
+
+            return (
+                "MISSION STATUS: COMPLETE. "
+                "state=%s, route=%s."
+                % (
+                    state,
+                    route_text,
+                )
+            )
+
+        return (
+            "MISSION STATUS: STOPPED. "
+            "state=%s, route=%s, process_exit=%d."
+            % (
+                state,
+                route_text,
+                code,
+            )
+        )
+
+    def cancel_delivery_mission(self):
+        """Cancel the active deterministic mission and its Nav2 goal."""
+
+        proc = self._mission_proc
+
+        if (
+            proc is None
+            or proc.poll() is not None
+        ):
+
+            return (
+                "No active delivery mission to cancel. "
+                + self.get_mission_status()
+            )
+
+        self.get_logger().warning(
+            "cancelling active deterministic delivery mission"
+        )
+
+        try:
+
+            # delivery_mission.py handles KeyboardInterrupt by
+            # cancelling its active Nav2 goal before shutting down.
+            os.killpg(
+                proc.pid,
+                signal.SIGINT
+            )
+
+            try:
+
+                proc.wait(
+                    timeout=5.0
+                )
+
+            except subprocess.TimeoutExpired:
+
+                self.get_logger().warning(
+                    "mission did not exit after SIGINT; "
+                    "sending SIGTERM"
+                )
+
+                os.killpg(
+                    proc.pid,
+                    signal.SIGTERM
+                )
+
+                try:
+                    proc.wait(
+                        timeout=3.0
+                    )
+                except subprocess.TimeoutExpired:
+                    os.killpg(
+                        proc.pid,
+                        signal.SIGKILL
+                    )
+                    proc.wait(
+                        timeout=2.0
+                    )
+
+        except ProcessLookupError:
+            pass
+
+        except Exception as exc:
+
+            return (
+                "MISSION CANCEL ERROR: %s: %s"
+                % (
+                    type(exc).__name__,
+                    exc,
+                )
+            )
+
+        # Final zero command as a belt-and-suspenders stop.
+        self.cmd_pub.publish(
+            Twist()
+        )
+
+        time.sleep(
+            0.2
+        )
+
+        return (
+            "DELIVERY MISSION CANCELLED. "
+            + self.get_mission_status()
+        )
+
     def run_delivery_mission(
         self,
         pickup,
         delivery
     ):
-        """Launch the deterministic delivery mission.
-
-        The LLM chooses the named pickup and delivery locations.
-        The delivery_mission node owns every navigation leg, retry,
-        loading/unloading state and the return to HOME.
-        """
+        """Start the deterministic delivery mission asynchronously."""
 
         pickup = str(
             pickup
@@ -946,7 +1139,16 @@ class RobotTools(Node):
             delivery
         ).strip().upper()
 
+        if self.mission_active():
+
+            return (
+                "Delivery mission REFUSED: another delivery "
+                "mission is already active. "
+                + self.get_mission_status()
+            )
+
         if pickup not in LOCATIONS:
+
             return (
                 "Delivery mission REFUSED: unknown pickup '%s'. %s"
                 % (
@@ -956,6 +1158,7 @@ class RobotTools(Node):
             )
 
         if delivery not in LOCATIONS:
+
             return (
                 "Delivery mission REFUSED: unknown delivery '%s'. %s"
                 % (
@@ -965,18 +1168,16 @@ class RobotTools(Node):
             )
 
         if pickup == delivery:
+
             return (
                 "Delivery mission REFUSED: pickup and delivery "
                 "cannot be the same location."
             )
 
-        # The current mission geometry is defined as
-        # HOME -> pickup -> delivery -> HOME.
-        # Refuse to start it from somewhere else rather than silently
-        # using an inappropriate first-leg arrival heading.
         pose = self._pose()
 
         if pose is None:
+
             return (
                 "Delivery mission REFUSED: current robot pose "
                 "is unavailable."
@@ -993,6 +1194,7 @@ class RobotTools(Node):
             home_distance
             > MISSION_HOME_START_TOLERANCE
         ):
+
             return (
                 "Delivery mission REFUSED: robot is %.2fm from HOME. "
                 "Return near HOME before starting the complete "
@@ -1005,6 +1207,7 @@ class RobotTools(Node):
         )
 
         if upright is False:
+
             return (
                 "Delivery mission REFUSED: "
                 + attitude
@@ -1013,6 +1216,7 @@ class RobotTools(Node):
         if not self.nav_client.wait_for_server(
             timeout_sec=2.0
         ):
+
             return (
                 "Delivery mission REFUSED: "
                 "Nav2 NavigateToPose server is unavailable."
@@ -1033,7 +1237,7 @@ class RobotTools(Node):
         ]
 
         self.get_logger().info(
-            "starting deterministic delivery: "
+            "starting asynchronous deterministic delivery: "
             "HOME -> %s -> %s -> HOME"
             % (
                 pickup,
@@ -1041,23 +1245,26 @@ class RobotTools(Node):
             )
         )
 
-        try:
-
-            result = subprocess.run(
-                cmd,
-                timeout=MISSION_TOOL_TIMEOUT,
-                check=False
+        with self._lock:
+            self._mission_state = 'STARTING'
+            self._mission_route = (
+                pickup,
+                delivery,
+            )
+            self._mission_started_at = (
+                time.time()
             )
 
-        except subprocess.TimeoutExpired:
+        try:
 
-            return (
-                "DELIVERY MISSION FAILED: mission process "
-                "exceeded %.0f seconds and was terminated."
-                % MISSION_TOOL_TIMEOUT
+            self._mission_proc = subprocess.Popen(
+                cmd,
+                start_new_session=True
             )
 
         except FileNotFoundError:
+
+            self._mission_proc = None
 
             return (
                 "DELIVERY MISSION FAILED: ros2 executable "
@@ -1065,6 +1272,8 @@ class RobotTools(Node):
             )
 
         except Exception as exc:
+
+            self._mission_proc = None
 
             return (
                 "DELIVERY MISSION FAILED to launch: %s: %s"
@@ -1074,23 +1283,17 @@ class RobotTools(Node):
                 )
             )
 
-        if result.returncode == 0:
-
-            return (
-                "DELIVERY MISSION SUCCEEDED: "
-                "HOME -> %s -> %s -> HOME completed."
-                % (
-                    pickup,
-                    delivery,
-                )
-            )
-
         return (
-            "DELIVERY MISSION FAILED with exit code %d. "
-            "The deterministic mission controller stopped or "
-            "aborted the sequence; do not manually continue "
-            "to the next delivery leg."
-            % result.returncode
+            "DELIVERY MISSION STARTED: "
+            "HOME -> %s -> %s -> HOME. "
+            "The deterministic mission controller now owns "
+            "vehicle movement. Do not issue manual movement "
+            "commands while it is active. Use "
+            "get_mission_status to check progress."
+            % (
+                pickup,
+                delivery,
+            )
         )
 
     # --- open-loop motion --------------------------------------------------

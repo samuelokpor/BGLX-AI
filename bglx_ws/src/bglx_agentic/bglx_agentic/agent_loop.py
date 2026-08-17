@@ -208,6 +208,30 @@ class Agent:
         self.trace = trace
 
     def _dispatch(self, name, args):
+
+        mission_owned_motion = {
+            'navigate_to',
+            'navigate_relative',
+            'navigate_to_landmark',
+            'turn_by',
+            'drive',
+        }
+
+        if (
+            name in mission_owned_motion
+            and getattr(
+                self.tools,
+                'mission_active',
+                lambda: False
+            )()
+        ):
+            return (
+                "BLOCKED BY HARNESS: a deterministic delivery "
+                "mission is active and owns vehicle movement. "
+                "Use get_mission_status or "
+                "cancel_delivery_mission instead."
+            )
+
         table = {
             "get_pose": lambda: self.tools.get_pose(),
             "get_scan_summary": lambda: self.tools.get_scan_summary(),
@@ -221,6 +245,8 @@ class Agent:
             "list_delivery_locations": lambda: self.tools.list_delivery_locations(),
             "run_delivery_mission": lambda: self.tools.run_delivery_mission(
                 args["pickup"], args["delivery"]),
+            "get_mission_status": lambda: self.tools.get_mission_status(),
+            "cancel_delivery_mission": lambda: self.tools.cancel_delivery_mission(),
             "navigate_to": lambda: self.tools.navigate_to(
                 args["x"], args["y"], args.get("yaw")),
             "navigate_relative": lambda: self.tools.navigate_relative(
@@ -263,6 +289,7 @@ class Agent:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to_landmark",
                  "run_delivery_mission", "list_delivery_locations",
+                 "get_mission_status", "cancel_delivery_mission",
                  "navigate_relative", "navigate_to", "turn_by", "mark_here",
                  "drive", "wait", "stop", "list_landmarks",
                  "get_last_failure", "check_attitude", "check_systems", "look",
@@ -295,6 +322,7 @@ class Agent:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to", "drive",
                  "run_delivery_mission", "list_delivery_locations",
+                 "get_mission_status", "cancel_delivery_mission",
                  "wait", "stop", "list_landmarks", "get_last_failure",
                  "navigate_relative", "turn_by", "mark_here", "check_attitude",
                  "navigate_to_landmark")
@@ -352,6 +380,8 @@ class Agent:
 
             acted = True
             results = []
+            mission_handoff = False
+
             for call in calls:
                 print("[tool ] %s(%s)" % (call.name, call.args))
                 sig = (call.name, json.dumps(call.args, sort_keys=True))
@@ -427,7 +457,50 @@ class Agent:
                     self.trace.tool_call(call.name, call.args, out, elapsed,
                                          pose_before, pose_after)
                 results.append((call, out))
-            self.backend.add_results(history, results)
+
+                # A successful asynchronous delivery launch is a
+                # handoff point. The deterministic mission controller
+                # now owns vehicle movement. Do not let the model keep
+                # this same task turn alive by calling wait() and
+                # polling until completion.
+                if (
+                    call.name == 'run_delivery_mission'
+                    and str(out).startswith(
+                        'DELIVERY MISSION STARTED:'
+                    )
+                ):
+                    mission_handoff = True
+                    break
+
+            self.backend.add_results(
+                history,
+                results
+            )
+
+            if mission_handoff:
+
+                msg = (
+                    "Delivery mission started and is now "
+                    "running independently. Use "
+                    "get_mission_status on a new task to "
+                    "check progress, or "
+                    "cancel_delivery_mission to cancel it."
+                )
+
+                print(
+                    "\n[agent] %s" % msg
+                )
+
+                if self.trace:
+                    self.trace.agent_text(
+                        msg
+                    )
+                    self.trace.task_end(
+                        "mission_started",
+                        self.trace.step
+                    )
+
+                return
 
         print("\n[agent] Step limit reached. Stopping.")
         if self.trace:

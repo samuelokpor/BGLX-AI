@@ -48,6 +48,19 @@ instructions and pass it as a tool argument.
 identical call that just failed.
 - Verify with get_pose or get_scan_summary before reporting a task complete.
 
+
+MISSION CONTROL:
+- run_delivery_mission STARTS the deterministic delivery asynchronously. A \
+successful tool call means the mission started, NOT that the parcel has been \
+delivered.
+- While a delivery mission is active, NEVER issue navigate_to, \
+navigate_relative, navigate_to_landmark, turn_by, or drive. The mission \
+controller owns vehicle movement.
+- Use get_mission_status when asked for progress. Only say the delivery is \
+complete when get_mission_status reports COMPLETE or the mission controller \
+reports MISSION_COMPLETE.
+- Use cancel_delivery_mission if the user asks to cancel an active delivery. \
+
 Be concise. One short line per step explaining what you are doing and why. \
 When the task is done, say so plainly and stop calling tools."""
 
@@ -255,11 +268,11 @@ TOOLS = [
     {
         "name": "run_delivery_mission",
         "description": (
-            "Run a COMPLETE autonomous parcel delivery using named mission "
+            "START a COMPLETE autonomous parcel delivery using named mission "
             "locations. The deterministic mission controller drives to the "
             "pickup, performs the loading state, drives to the delivery "
             "location, unloads, and returns HOME. It also owns controlled "
-            "navigation retries and abort handling. Use this instead of "
+            "navigation retries and abort handling. This tool returns after ""the mission has STARTED; it does not mean the delivery is complete. ""Use get_mission_status for progress. Use this instead of "
             "manually issuing navigate_to calls for each delivery leg. "
             "The vehicle must begin near HOME."
         ),
@@ -283,6 +296,32 @@ TOOLS = [
                 "pickup",
                 "delivery",
             ],
+        },
+    },
+    {
+        "name": "get_mission_status",
+        "description": (
+            "Report the current deterministic delivery mission state. "
+            "Use this after run_delivery_mission or whenever the user asks "
+            "whether a delivery is still running, complete, stopped, "
+            "loading, unloading, or returning home."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "cancel_delivery_mission",
+        "description": (
+            "Cancel the currently active deterministic delivery mission. "
+            "This interrupts the mission controller, cancels its active "
+            "Nav2 goal, and stops mission execution. Use only when the user "
+            "requests cancellation or when continuing the mission is unsafe."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
         },
     },
     {
