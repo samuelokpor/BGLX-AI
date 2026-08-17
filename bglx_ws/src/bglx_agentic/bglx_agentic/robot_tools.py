@@ -15,6 +15,7 @@ The agent sees only the public methods, and they return English.
 
 import math
 import os
+import subprocess
 import threading
 import time
 
@@ -40,6 +41,7 @@ from tf2_ros import TransformException
 from .vision import VisionTool
 from .map_check import compare as compare_map, confidence_note
 from .corridor import check_corridor, can_turn_around
+from .mission_waypoints import LOCATIONS
 from .observations import (summarise_scan, format_scan, SECTORS, diagnose_nav_failure,
                            MIN_TURN_RADIUS, MAX_LINEAR_VEL,
                            MIN_SPEED_FOR_YAW, max_yaw_rate)
@@ -56,6 +58,8 @@ GLOBAL_FRAME = 'map'
 ODOM_FRAME = 'odom'
 FOOTPRINT_FORWARD_REACH = 1.25
 NAV_TIMEOUT = 180.0
+MISSION_HOME_START_TOLERANCE = 1.0
+MISSION_TOOL_TIMEOUT = 900.0
 LOCAL_COSTMAP_LETHAL = 90      # occupancy 0..100; >= this counts as an obstacle
 COSTMAP_SENSE_MAX_RANGE = 6.0  # m: how far to ray-march the costmap per sector
 REVERSE_STRAIGHT_MAX = 5.0      # m: reverse <= this goes straight-back, no reorientation
@@ -907,6 +911,187 @@ class RobotTools(Node):
         if lm is None:
             return "No landmark named '%s'. %s" % (name, self.list_landmarks())
         return self.navigate_to(lm['x'], lm['y'], lm.get('yaw', 0.0))
+
+    # --- deterministic delivery mission -----------------------------------
+
+    def list_delivery_locations(self):
+        """Return names accepted by the delivery mission."""
+
+        names = sorted(
+            LOCATIONS.keys()
+        )
+
+        return (
+            "Named delivery locations: "
+            + ", ".join(names)
+        )
+
+    def run_delivery_mission(
+        self,
+        pickup,
+        delivery
+    ):
+        """Launch the deterministic delivery mission.
+
+        The LLM chooses the named pickup and delivery locations.
+        The delivery_mission node owns every navigation leg, retry,
+        loading/unloading state and the return to HOME.
+        """
+
+        pickup = str(
+            pickup
+        ).strip().upper()
+
+        delivery = str(
+            delivery
+        ).strip().upper()
+
+        if pickup not in LOCATIONS:
+            return (
+                "Delivery mission REFUSED: unknown pickup '%s'. %s"
+                % (
+                    pickup,
+                    self.list_delivery_locations(),
+                )
+            )
+
+        if delivery not in LOCATIONS:
+            return (
+                "Delivery mission REFUSED: unknown delivery '%s'. %s"
+                % (
+                    delivery,
+                    self.list_delivery_locations(),
+                )
+            )
+
+        if pickup == delivery:
+            return (
+                "Delivery mission REFUSED: pickup and delivery "
+                "cannot be the same location."
+            )
+
+        # The current mission geometry is defined as
+        # HOME -> pickup -> delivery -> HOME.
+        # Refuse to start it from somewhere else rather than silently
+        # using an inappropriate first-leg arrival heading.
+        pose = self._pose()
+
+        if pose is None:
+            return (
+                "Delivery mission REFUSED: current robot pose "
+                "is unavailable."
+            )
+
+        hx, hy = LOCATIONS['HOME']
+
+        home_distance = math.hypot(
+            pose[0] - hx,
+            pose[1] - hy
+        )
+
+        if (
+            home_distance
+            > MISSION_HOME_START_TOLERANCE
+        ):
+            return (
+                "Delivery mission REFUSED: robot is %.2fm from HOME. "
+                "Return near HOME before starting the complete "
+                "delivery mission."
+                % home_distance
+            )
+
+        upright, attitude = (
+            self.check_attitude()
+        )
+
+        if upright is False:
+            return (
+                "Delivery mission REFUSED: "
+                + attitude
+            )
+
+        if not self.nav_client.wait_for_server(
+            timeout_sec=2.0
+        ):
+            return (
+                "Delivery mission REFUSED: "
+                "Nav2 NavigateToPose server is unavailable."
+            )
+
+        cmd = [
+            'ros2',
+            'run',
+            'bglx_agentic',
+            'delivery_mission',
+            '--ros-args',
+            '-p',
+            'home_name:=HOME',
+            '-p',
+            'pickup_name:=%s' % pickup,
+            '-p',
+            'delivery_name:=%s' % delivery,
+        ]
+
+        self.get_logger().info(
+            "starting deterministic delivery: "
+            "HOME -> %s -> %s -> HOME"
+            % (
+                pickup,
+                delivery,
+            )
+        )
+
+        try:
+
+            result = subprocess.run(
+                cmd,
+                timeout=MISSION_TOOL_TIMEOUT,
+                check=False
+            )
+
+        except subprocess.TimeoutExpired:
+
+            return (
+                "DELIVERY MISSION FAILED: mission process "
+                "exceeded %.0f seconds and was terminated."
+                % MISSION_TOOL_TIMEOUT
+            )
+
+        except FileNotFoundError:
+
+            return (
+                "DELIVERY MISSION FAILED: ros2 executable "
+                "was not found in the agent environment."
+            )
+
+        except Exception as exc:
+
+            return (
+                "DELIVERY MISSION FAILED to launch: %s: %s"
+                % (
+                    type(exc).__name__,
+                    exc,
+                )
+            )
+
+        if result.returncode == 0:
+
+            return (
+                "DELIVERY MISSION SUCCEEDED: "
+                "HOME -> %s -> %s -> HOME completed."
+                % (
+                    pickup,
+                    delivery,
+                )
+            )
+
+        return (
+            "DELIVERY MISSION FAILED with exit code %d. "
+            "The deterministic mission controller stopped or "
+            "aborted the sequence; do not manually continue "
+            "to the next delivery leg."
+            % result.returncode
+        )
 
     # --- open-loop motion --------------------------------------------------
     def drive(self, linear_x, angular_z, duration):

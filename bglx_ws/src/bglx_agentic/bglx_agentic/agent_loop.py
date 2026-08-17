@@ -218,6 +218,9 @@ class Agent:
             "check_low_obstacles": lambda: self.tools.check_low_obstacles(),
             "check_attitude": lambda: self.tools.check_attitude()[1],
             "list_landmarks": lambda: self.tools.list_landmarks(),
+            "list_delivery_locations": lambda: self.tools.list_delivery_locations(),
+            "run_delivery_mission": lambda: self.tools.run_delivery_mission(
+                args["pickup"], args["delivery"]),
             "navigate_to": lambda: self.tools.navigate_to(
                 args["x"], args["y"], args.get("yaw")),
             "navigate_relative": lambda: self.tools.navigate_relative(
@@ -259,6 +262,7 @@ class Agent:
         if not text:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to_landmark",
+                 "run_delivery_mission", "list_delivery_locations",
                  "navigate_relative", "navigate_to", "turn_by", "mark_here",
                  "drive", "wait", "stop", "list_landmarks",
                  "get_last_failure", "check_attitude", "check_systems", "look",
@@ -290,6 +294,7 @@ class Agent:
         if not text:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to", "drive",
+                 "run_delivery_mission", "list_delivery_locations",
                  "wait", "stop", "list_landmarks", "get_last_failure",
                  "navigate_relative", "turn_by", "mark_here", "check_attitude",
                  "navigate_to_landmark")

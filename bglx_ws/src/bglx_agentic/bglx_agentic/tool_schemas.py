@@ -38,6 +38,8 @@ where the robot is or which way it faces.
 navigate_relative. Never compute coordinates yourself.
 - For absolute coordinates or landmarks use navigate_to or \
 navigate_to_landmark.
+- For a complete parcel delivery between named mission locations, use run_delivery_mission. Do NOT manually sequence navigate_to calls for pickup, delivery and return-home legs. Call list_delivery_locations first if the location names are uncertain. \
+- run_delivery_mission owns the complete delivery state machine and its controlled retries. Once it is running, do not duplicate its navigation legs with other movement tools. \
 - Use drive only after Nav2 has failed and a diagnosis says the robot must \
 reposition to escape.
 - Distances come from the USER'S REQUEST. Never take a number from these \
@@ -237,6 +239,50 @@ TOOLS = [
                              "description": "seconds, max 10"},
             },
             "required": ["linear_x", "angular_z", "duration"],
+        },
+    },
+    {
+        "name": "list_delivery_locations",
+        "description": (
+            "List the valid named locations that may be used for the "
+            "deterministic BGLX delivery mission."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "run_delivery_mission",
+        "description": (
+            "Run a COMPLETE autonomous parcel delivery using named mission "
+            "locations. The deterministic mission controller drives to the "
+            "pickup, performs the loading state, drives to the delivery "
+            "location, unloads, and returns HOME. It also owns controlled "
+            "navigation retries and abort handling. Use this instead of "
+            "manually issuing navigate_to calls for each delivery leg. "
+            "The vehicle must begin near HOME."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pickup": {
+                    "type": "string",
+                    "description": (
+                        "Named pickup location, for example PICKUP_A."
+                    ),
+                },
+                "delivery": {
+                    "type": "string",
+                    "description": (
+                        "Named delivery location, for example DELIVERY_A."
+                    ),
+                },
+            },
+            "required": [
+                "pickup",
+                "delivery",
+            ],
         },
     },
     {
