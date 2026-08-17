@@ -11,6 +11,8 @@ from action_msgs.msg import GoalStatus
 from nav2_msgs.action import NavigateToPose
 from std_msgs.msg import String
 
+from bglx_agentic.mission_waypoints import build_delivery_route
+
 
 def quat_from_yaw(yaw):
     return (
@@ -57,56 +59,26 @@ class DeliveryMission(Node):
         )
 
         # --------------------------------------------------
-        # Validated Oxford mission coordinates.
+        # Named mission locations.
         #
-        # Arrival headings are aligned with the incoming
-        # direction of travel to avoid forcing the tricycle
-        # into unnecessary end-of-goal turning.
+        # XY positions live in mission_waypoints.py.
+        # Arrival yaw is calculated from the incoming
+        # direction of travel.
         # --------------------------------------------------
 
         self.declare_parameter(
-            'home_x',
-            0.000
+            'home_name',
+            'HOME'
         )
 
         self.declare_parameter(
-            'home_y',
-            0.000
+            'pickup_name',
+            'PICKUP_A'
         )
 
         self.declare_parameter(
-            'home_yaw_deg',
-            -132.14
-        )
-
-        self.declare_parameter(
-            'pickup_x',
-            5.514
-        )
-
-        self.declare_parameter(
-            'pickup_y',
-            0.098
-        )
-
-        self.declare_parameter(
-            'pickup_yaw_deg',
-            1.02
-        )
-
-        self.declare_parameter(
-            'delivery_x',
-            4.969
-        )
-
-        self.declare_parameter(
-            'delivery_y',
-            5.492
-        )
-
-        self.declare_parameter(
-            'delivery_yaw_deg',
-            95.77
+            'delivery_name',
+            'DELIVERY_A'
         )
 
         gp = self.get_parameter
@@ -141,35 +113,35 @@ class DeliveryMission(Node):
             )
         )
 
-        self.home = (
-            float(gp('home_x').value),
-            float(gp('home_y').value),
-            math.radians(
-                float(
-                    gp('home_yaw_deg').value
-                )
-            ),
+        self.home_name = str(
+            gp('home_name').value
         )
 
-        self.pickup = (
-            float(gp('pickup_x').value),
-            float(gp('pickup_y').value),
-            math.radians(
-                float(
-                    gp('pickup_yaw_deg').value
-                )
-            ),
+        self.pickup_name = str(
+            gp('pickup_name').value
         )
 
-        self.delivery = (
-            float(gp('delivery_x').value),
-            float(gp('delivery_y').value),
-            math.radians(
-                float(
-                    gp('delivery_yaw_deg').value
-                )
-            ),
+        self.delivery_name = str(
+            gp('delivery_name').value
         )
+
+        route = build_delivery_route(
+            self.home_name,
+            self.pickup_name,
+            self.delivery_name
+        )
+
+        self.pickup = route[
+            'pickup'
+        ]
+
+        self.delivery = route[
+            'delivery'
+        ]
+
+        self.home = route[
+            'home'
+        ]
 
         # ==================================================
         # ROS interfaces
