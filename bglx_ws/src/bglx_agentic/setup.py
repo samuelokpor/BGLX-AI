@@ -23,6 +23,7 @@ setup(
             'inspect = bglx_agentic.robot_tools:main',
             'record_landmark = bglx_agentic.robot_tools:record_landmark',
             'agent = bglx_agentic.agent_loop:main',
+            'delivery_mission = bglx_agentic.delivery_mission:main',
         ],
     },
 )
