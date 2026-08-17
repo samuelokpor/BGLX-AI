@@ -71,6 +71,32 @@ class CmdVelLimiter(Node):
             'fail_closed_on_rear_scan_loss',
             True)
 
+        # Independent side-sensor health watchdogs.
+        #
+        # Collision Monitor on ROS 2 Humble does not reliably
+        # fail closed when an observation source disappears.
+        # Therefore the final velocity limiter independently
+        # verifies that both side safety scans remain alive.
+        self.declare_parameter(
+            'left_scan_topic',
+            '/etrike/left_depth/scan')
+        self.declare_parameter(
+            'left_scan_timeout',
+            0.75)
+        self.declare_parameter(
+            'fail_closed_on_left_scan_loss',
+            True)
+
+        self.declare_parameter(
+            'right_scan_topic',
+            '/etrike/right_depth/scan')
+        self.declare_parameter(
+            'right_scan_timeout',
+            0.75)
+        self.declare_parameter(
+            'fail_closed_on_right_scan_loss',
+            True)
+
         # Independent forward terrain safety guard.
         #
         # Terrain hazards restrict forward motion only so the
@@ -130,6 +156,20 @@ class CmdVelLimiter(Node):
         self.rear_fail_closed = bool(
             gp('fail_closed_on_rear_scan_loss').value)
 
+        self.left_scan_topic = gp(
+            'left_scan_topic').value
+        self.left_scan_timeout = float(
+            gp('left_scan_timeout').value)
+        self.left_fail_closed = bool(
+            gp('fail_closed_on_left_scan_loss').value)
+
+        self.right_scan_topic = gp(
+            'right_scan_topic').value
+        self.right_scan_timeout = float(
+            gp('right_scan_timeout').value)
+        self.right_fail_closed = bool(
+            gp('fail_closed_on_right_scan_loss').value)
+
         self.terrain_hazard_topic = gp(
             'terrain_hazard_topic').value
         self.terrain_hazard_timeout = float(
@@ -160,6 +200,18 @@ class CmdVelLimiter(Node):
             self.on_rear_scan,
             qos_profile_sensor_data)
 
+        self.left_scan_sub = self.create_subscription(
+            LaserScan,
+            self.left_scan_topic,
+            self.on_left_scan,
+            qos_profile_sensor_data)
+
+        self.right_scan_sub = self.create_subscription(
+            LaserScan,
+            self.right_scan_topic,
+            self.on_right_scan,
+            qos_profile_sensor_data)
+
         self.terrain_hazard_sub = self.create_subscription(
             Bool,
             self.terrain_hazard_topic,
@@ -176,6 +228,9 @@ class CmdVelLimiter(Node):
 
         self._rear_near = None
         self._rear_scan_stamp = None
+
+        self._left_scan_stamp = None
+        self._right_scan_stamp = None
 
         self._terrain_hazard = None
         self._terrain_hazard_stamp = None
@@ -249,6 +304,11 @@ class CmdVelLimiter(Node):
         if v <= 0.0:
             return None
 
+        side_reason = self._side_scan_guard_reason()
+
+        if side_reason is not None:
+            return side_reason
+
         if self._front_scan_stamp is None:
             if self.fail_closed:
                 return 'no front_scan received yet'
@@ -313,6 +373,11 @@ class CmdVelLimiter(Node):
         if v >= 0.0:
             return None
 
+        side_reason = self._side_scan_guard_reason()
+
+        if side_reason is not None:
+            return side_reason
+
         if self._rear_scan_stamp is None:
             if self.rear_fail_closed:
                 return 'no rear_scan received yet'
@@ -336,6 +401,79 @@ class CmdVelLimiter(Node):
                 'rear obstacle %.2fm behind'
                 % self._rear_near
             )
+
+        return None
+
+
+    def on_left_scan(self, msg: LaserScan):
+        """
+        Side scan geometry is handled by Collision Monitor.
+        The final limiter independently tracks freshness only.
+        """
+        self._left_scan_stamp = self.get_clock().now()
+
+
+    def on_right_scan(self, msg: LaserScan):
+        """
+        Side scan geometry is handled by Collision Monitor.
+        The final limiter independently tracks freshness only.
+        """
+        self._right_scan_stamp = self.get_clock().now()
+
+
+    def _side_scan_guard_reason(self):
+        """
+        Fail closed if either required side safety scan is
+        missing or stale.
+
+        Unlike the front/rear geometric guards, side-source
+        loss blocks motion in either direction because 360
+        degree lateral clearance can no longer be guaranteed.
+        """
+
+        now = self.get_clock().now()
+
+        if self._left_scan_stamp is None:
+
+            if self.left_fail_closed:
+                return 'no left_scan received yet'
+
+        else:
+
+            age = (
+                now -
+                self._left_scan_stamp
+            ).nanoseconds * 1e-9
+
+            if (
+                age > self.left_scan_timeout and
+                self.left_fail_closed
+            ):
+                return (
+                    'left_scan stale '
+                    '(%.2fs old)' % age
+                )
+
+        if self._right_scan_stamp is None:
+
+            if self.right_fail_closed:
+                return 'no right_scan received yet'
+
+        else:
+
+            age = (
+                now -
+                self._right_scan_stamp
+            ).nanoseconds * 1e-9
+
+            if (
+                age > self.right_scan_timeout and
+                self.right_fail_closed
+            ):
+                return (
+                    'right_scan stale '
+                    '(%.2fs old)' % age
+                )
 
         return None
 
