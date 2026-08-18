@@ -38,7 +38,8 @@ where the robot is or which way it faces.
 navigate_relative. Never compute coordinates yourself.
 - For absolute coordinates or landmarks use navigate_to or \
 navigate_to_landmark.
-- For a complete parcel delivery between named mission locations, use run_delivery_mission. Do NOT manually sequence navigate_to calls for pickup, delivery and return-home legs. Call list_delivery_locations first if the location names are uncertain. \
+- For one pickup and ONE delivery location, use run_delivery_mission. Do NOT manually sequence navigate_to calls for the pickup, delivery and return-home legs. \
+- For one pickup and TWO OR MORE ordered delivery stops, use run_multi_stop_delivery. Preserve the stop order requested by the user; do not invent route optimization. \
 - When the user asks to remember, save, teach, or record the CURRENT place specifically as a delivery pickup/drop-off/depot, use record_delivery_location. Do not use the generic mark_here tool for delivery locations. \
 - When the user explicitly asks to move/update/correct an EXISTING saved delivery location to the robot's CURRENT position, use update_delivery_location. Do not use record_delivery_location for an existing location. \
 - When the user explicitly asks to forget/delete/remove a saved CUSTOM delivery location, use delete_delivery_location. Never delete a location merely because it is unused or inconvenient. \
@@ -365,6 +366,43 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {},
+        },
+    },
+    {
+        "name": "run_multi_stop_delivery",
+        "description": (
+            "START a complete autonomous delivery with ONE pickup followed "
+            "by TWO OR MORE ORDERED delivery stops, then return HOME. "
+            "The stop order is preserved exactly as supplied. Use this when "
+            "the user asks for multiple deliveries in one route. Do not "
+            "reorder or optimize the stops. The mission runs asynchronously; "
+            "use get_mission_status for live progress."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "pickup": {
+                    "type": "string",
+                    "description": (
+                        "Pickup location name or alias."
+                    ),
+                },
+                "deliveries": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                        "type": "string",
+                    },
+                    "description": (
+                        "Ordered delivery location names or aliases. "
+                        "The order in this array is the required stop order."
+                    ),
+                },
+            },
+            "required": [
+                "pickup",
+                "deliveries",
+            ],
         },
     },
     {

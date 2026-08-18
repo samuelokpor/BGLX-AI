@@ -253,6 +253,8 @@ class Agent:
             "list_delivery_locations": lambda: self.tools.list_delivery_locations(),
             "run_delivery_mission": lambda: self.tools.run_delivery_mission(
                 args["pickup"], args["delivery"]),
+            "run_multi_stop_delivery": lambda: self.tools.run_multi_stop_delivery(
+                args["pickup"], args["deliveries"]),
             "get_mission_status": lambda: self.tools.get_mission_status(),
             "get_mission_history": lambda: self.tools.get_mission_history(args.get("limit", 5)),
             "cancel_delivery_mission": lambda: self.tools.cancel_delivery_mission(),
@@ -297,7 +299,7 @@ class Agent:
         if not text:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to_landmark",
-                 "run_delivery_mission", "list_delivery_locations",
+                 "run_delivery_mission", "run_multi_stop_delivery", "list_delivery_locations",
                  "record_delivery_location",
                  "update_delivery_location", "delete_delivery_location",
                  "get_mission_status", "get_mission_history", "cancel_delivery_mission",
@@ -332,7 +334,7 @@ class Agent:
         if not text:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to", "drive",
-                 "run_delivery_mission", "list_delivery_locations",
+                 "run_delivery_mission", "run_multi_stop_delivery", "list_delivery_locations",
                  "record_delivery_location",
                  "update_delivery_location", "delete_delivery_location",
                  "get_mission_status", "get_mission_history", "cancel_delivery_mission",

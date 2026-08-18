@@ -1260,8 +1260,12 @@ class RobotTools(Node):
             route_text = "unknown route"
         else:
             route_text = (
-                "HOME -> %s -> %s -> HOME"
-                % route
+                "HOME -> "
+                + " -> ".join(
+                    str(name)
+                    for name in route
+                )
+                + " -> HOME"
             )
 
         elapsed = None
@@ -1416,15 +1420,59 @@ class RobotTools(Node):
         pickup,
         delivery
     ):
-        """Start the deterministic delivery mission asynchronously."""
+        """
+        Backward-compatible single-delivery mission.
+
+        Internally this now uses the generalized ordered
+        multi-stop mission runner.
+        """
+
+        return self.run_multi_stop_delivery(
+            pickup,
+            [
+                delivery,
+            ]
+        )
+
+
+    def run_multi_stop_delivery(
+        self,
+        pickup,
+        deliveries
+    ):
+        """
+        Start one pickup followed by one or more ORDERED
+        delivery stops and finally return HOME.
+
+        Stop order is preserved exactly as supplied.
+        """
 
         pickup_input = str(
             pickup
         ).strip()
 
-        delivery_input = str(
-            delivery
-        ).strip()
+        if not isinstance(
+            deliveries,
+            list
+        ):
+
+            return (
+                "Multi-stop delivery REFUSED: deliveries "
+                "must be a list of delivery location names."
+            )
+
+        delivery_inputs = [
+            str(name).strip()
+            for name in deliveries
+            if str(name).strip()
+        ]
+
+        if not delivery_inputs:
+
+            return (
+                "Multi-stop delivery REFUSED: at least one "
+                "delivery location is required."
+            )
 
         if self.mission_active():
 
@@ -1433,6 +1481,10 @@ class RobotTools(Node):
                 "mission is already active. "
                 + self.get_mission_status()
             )
+
+        # --------------------------------------------------
+        # Resolve / validate pickup.
+        # --------------------------------------------------
 
         try:
 
@@ -1451,32 +1503,13 @@ class RobotTools(Node):
                 )
             )
 
-        try:
-
-            delivery = resolve_location_name(
-                delivery_input
-            )
-
-        except ValueError:
-
-            return (
-                "Delivery mission REFUSED: unknown delivery "
-                "location '%s'.\n%s"
-                % (
-                    delivery_input,
-                    self.list_delivery_locations(),
-                )
-            )
-
         pickup_info = get_location_info(
             pickup
         )
 
-        delivery_info = get_location_info(
-            delivery
-        )
-
-        if pickup_info.get('type') != 'pickup':
+        if pickup_info.get(
+            'type'
+        ) != 'pickup':
 
             return (
                 "Delivery mission REFUSED: '%s' resolves to %s, "
@@ -1491,27 +1524,82 @@ class RobotTools(Node):
                 )
             )
 
-        if delivery_info.get('type') != 'delivery':
+        # --------------------------------------------------
+        # Resolve / validate ordered delivery stops.
+        # --------------------------------------------------
 
-            return (
-                "Delivery mission REFUSED: '%s' resolves to %s, "
-                "which is a %s location, not a delivery location."
-                % (
-                    delivery_input,
-                    delivery,
-                    delivery_info.get(
-                        'type',
-                        'generic'
-                    ),
+        canonical_deliveries = []
+
+        for original_name in delivery_inputs:
+
+            try:
+
+                canonical = resolve_location_name(
+                    original_name
+                )
+
+            except ValueError:
+
+                return (
+                    "Delivery mission REFUSED: unknown delivery "
+                    "location '%s'.\n%s"
+                    % (
+                        original_name,
+                        self.list_delivery_locations(),
+                    )
+                )
+
+            info = get_location_info(
+                canonical
+            )
+
+            if info.get(
+                'type'
+            ) != 'delivery':
+
+                return (
+                    "Delivery mission REFUSED: '%s' resolves to %s, "
+                    "which is a %s location, not a delivery location."
+                    % (
+                        original_name,
+                        canonical,
+                        info.get(
+                            'type',
+                            'generic'
+                        ),
+                    )
+                )
+
+            if canonical == pickup:
+
+                return (
+                    "Delivery mission REFUSED: pickup and delivery "
+                    "cannot be the same location."
+                )
+
+            canonical_deliveries.append(
+                canonical
+            )
+
+        if (
+            len(
+                set(
+                    canonical_deliveries
                 )
             )
-
-        if pickup == delivery:
+            != len(
+                canonical_deliveries
+            )
+        ):
 
             return (
-                "Delivery mission REFUSED: pickup and delivery "
-                "cannot be the same location."
+                "Multi-stop delivery REFUSED: the same delivery "
+                "location appears more than once in the route."
             )
+
+        # --------------------------------------------------
+        # Prepare at HOME.
+        # --------------------------------------------------
 
         pose = self._pose()
 
@@ -1522,7 +1610,17 @@ class RobotTools(Node):
                 "is unavailable."
             )
 
-        hx, hy = LOCATIONS['HOME']
+        home_info = get_location_info(
+            'HOME'
+        )
+
+        hx = float(
+            home_info['x']
+        )
+
+        hy = float(
+            home_info['y']
+        )
 
         home_distance = math.hypot(
             pose[0] - hx,
@@ -1545,10 +1643,6 @@ class RobotTools(Node):
                 flush=True
             )
 
-            # Approach HOME along the direction of travel from the
-            # current position. This keeps the preparation movement
-            # compatible with the tricycle geometry rather than
-            # imposing an arbitrary final heading.
             home_yaw = math.atan2(
                 hy - pose[1],
                 hx - pose[0]
@@ -1568,7 +1662,9 @@ class RobotTools(Node):
                     "Delivery mission REFUSED: automatic return "
                     "to HOME finished but the robot pose is "
                     "unavailable. "
-                    + str(home_result)
+                    + str(
+                        home_result
+                    )
                 )
 
             home_distance = math.hypot(
@@ -1601,6 +1697,10 @@ class RobotTools(Node):
                 flush=True
             )
 
+        # --------------------------------------------------
+        # Vehicle / Nav2 readiness.
+        # --------------------------------------------------
+
         upright, attitude = (
             self.check_attitude()
         )
@@ -1621,6 +1721,27 @@ class RobotTools(Node):
                 "Nav2 NavigateToPose server is unavailable."
             )
 
+        deliveries_csv = ','.join(
+            canonical_deliveries
+        )
+
+        route_names = (
+            [
+                'HOME',
+                pickup,
+            ]
+            + canonical_deliveries
+            + [
+                'HOME',
+            ]
+        )
+
+        route_text = ' -> '.join(
+            route_names
+        )
+
+        # delivery_name is still passed for backward compatibility.
+        # delivery_names_csv activates the generalized route.
         cmd = [
             'ros2',
             'run',
@@ -1630,42 +1751,52 @@ class RobotTools(Node):
             '-p',
             'home_name:=HOME',
             '-p',
-            'pickup_name:=%s' % pickup,
+            'pickup_name:=%s'
+            % pickup,
             '-p',
-            'delivery_name:=%s' % delivery,
+            'delivery_name:=%s'
+            % canonical_deliveries[0],
+            '-p',
+            'delivery_names_csv:=%s'
+            % deliveries_csv,
         ]
 
         self.get_logger().info(
-            "starting asynchronous deterministic delivery: "
-            "HOME -> %s -> %s -> HOME"
-            % (
-                pickup,
-                delivery,
-            )
+            "starting asynchronous deterministic delivery: %s"
+            % route_text
         )
 
         with self._lock:
-            self._mission_state = 'STARTING'
-            self._mission_route = (
-                pickup,
-                delivery,
+
+            self._mission_state = (
+                'STARTING'
             )
+
+            self._mission_route = tuple(
+                [
+                    pickup,
+                ]
+                + canonical_deliveries
+            )
+
             self._mission_started_at = (
                 time.time()
             )
 
         try:
 
-            # Keep the asynchronous mission's verbose Nav2/state output
-            # away from the interactive agent prompt. The latest mission
-            # always gets its own clean log file.
             os.makedirs(
-                os.path.dirname(MISSION_LOG_PATH),
+                os.path.dirname(
+                    MISSION_LOG_PATH
+                ),
                 exist_ok=True
             )
 
             mission_env = os.environ.copy()
-            mission_env['PYTHONUNBUFFERED'] = '1'
+
+            mission_env[
+                'PYTHONUNBUFFERED'
+            ] = '1'
 
             with open(
                 MISSION_LOG_PATH,
@@ -1697,27 +1828,26 @@ class RobotTools(Node):
             return (
                 "DELIVERY MISSION FAILED to launch: %s: %s"
                 % (
-                    type(exc).__name__,
+                    type(
+                        exc
+                    ).__name__,
                     exc,
                 )
             )
 
         return (
-            "DELIVERY MISSION STARTED: "
-            "HOME -> %s -> %s -> HOME. "
+            "DELIVERY MISSION STARTED: %s. "
             "The deterministic mission controller now owns "
             "vehicle movement. Do not issue manual movement "
             "commands while it is active. Use "
             "get_mission_status to check progress. "
             "Detailed mission output is being written to %s."
             % (
-                pickup,
-                delivery,
+                route_text,
                 MISSION_LOG_PATH,
             )
         )
 
-    # --- open-loop motion --------------------------------------------------
     def drive(self, linear_x, angular_z, duration):
         """Escape hatch. Goes THROUGH cmd_vel_limiter, not around it."""
         linear_x = max(-MAX_LINEAR_VEL, min(MAX_LINEAR_VEL, float(linear_x)))

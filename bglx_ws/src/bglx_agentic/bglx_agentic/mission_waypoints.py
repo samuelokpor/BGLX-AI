@@ -1044,3 +1044,87 @@ def build_delivery_route(
             home_name
         ),
     }
+
+
+def build_multi_stop_route(
+    home_name,
+    pickup_name,
+    delivery_names
+):
+    """
+    Build an ordered delivery route:
+
+        HOME -> PICKUP -> DELIVERY_1 -> ... -> DELIVERY_N -> HOME
+
+    Arrival yaw for every stop follows the incoming direction of travel.
+    """
+
+    home_name = resolve_location_name(
+        home_name
+    )
+
+    pickup_name = resolve_location_name(
+        pickup_name
+    )
+
+    if not isinstance(
+        delivery_names,
+        (list, tuple)
+    ):
+
+        raise ValueError(
+            'delivery_names must be a list or tuple.'
+        )
+
+    if not delivery_names:
+
+        raise ValueError(
+            'At least one delivery location is required.'
+        )
+
+    canonical_deliveries = []
+
+    for name in delivery_names:
+
+        canonical_deliveries.append(
+            resolve_location_name(
+                name
+            )
+        )
+
+    pickup_pose = arrival_pose(
+        home_name,
+        pickup_name
+    )
+
+    deliveries = []
+
+    previous_name = pickup_name
+
+    for canonical in canonical_deliveries:
+
+        deliveries.append(
+            {
+                'name': canonical,
+                'pose': arrival_pose(
+                    previous_name,
+                    canonical
+                ),
+            }
+        )
+
+        previous_name = canonical
+
+    home_pose = arrival_pose(
+        previous_name,
+        home_name
+    )
+
+    return {
+        'home_name': home_name,
+        'pickup_name': pickup_name,
+        'delivery_names': canonical_deliveries,
+        'pickup': pickup_pose,
+        'deliveries': deliveries,
+        'home': home_pose,
+    }

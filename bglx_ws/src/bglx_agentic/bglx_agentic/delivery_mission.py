@@ -11,7 +11,10 @@ from action_msgs.msg import GoalStatus
 from nav2_msgs.action import NavigateToPose
 from std_msgs.msg import String
 
-from bglx_agentic.mission_waypoints import build_delivery_route
+from bglx_agentic.mission_waypoints import (
+    build_delivery_route,
+    build_multi_stop_route,
+)
 from bglx_agentic.mission_history import (
     append_mission_record,
     new_mission_id,
@@ -86,6 +89,11 @@ class DeliveryMission(Node):
             'DELIVERY_A'
         )
 
+        self.declare_parameter(
+            'delivery_names_csv',
+            ''
+        )
+
         gp = self.get_parameter
 
         self.frame = str(
@@ -130,18 +138,58 @@ class DeliveryMission(Node):
             gp('delivery_name').value
         )
 
-        route = build_delivery_route(
+        self.delivery_names_csv = str(
+            gp('delivery_names_csv').value
+        ).strip()
+
+        if self.delivery_names_csv:
+
+            requested_delivery_names = [
+                name.strip()
+                for name
+                in self.delivery_names_csv.split(',')
+                if name.strip()
+            ]
+
+        else:
+
+            requested_delivery_names = [
+                self.delivery_name
+            ]
+
+        route = build_multi_stop_route(
             self.home_name,
             self.pickup_name,
-            self.delivery_name
+            requested_delivery_names
         )
+
+        # Store canonical names returned by the registry.
+        self.home_name = route[
+            'home_name'
+        ]
+
+        self.pickup_name = route[
+            'pickup_name'
+        ]
+
+        self.delivery_names = route[
+            'delivery_names'
+        ]
 
         self.pickup = route[
             'pickup'
         ]
 
-        self.delivery = route[
-            'delivery'
+        self.delivery_stops = route[
+            'deliveries'
+        ]
+
+        # Backward compatibility for any code still expecting
+        # the original single self.delivery pose.
+        self.delivery = self.delivery_stops[
+            0
+        ][
+            'pose'
         ]
 
         self.home = route[
@@ -522,6 +570,28 @@ class DeliveryMission(Node):
             '======================================'
         )
 
+        route_names = (
+            [
+                self.home_name,
+                self.pickup_name,
+            ]
+            + list(
+                self.delivery_names
+            )
+            + [
+                self.home_name,
+            ]
+        )
+
+        print(
+            'ROUTE: %s'
+            % ' -> '.join(
+                route_names
+            )
+        )
+
+        print()
+
         print(
             'HOME       '
             '(%.3f, %.3f, %.2f deg)'
@@ -535,9 +605,10 @@ class DeliveryMission(Node):
         )
 
         print(
-            'PICKUP_A   '
+            'PICKUP     %s '
             '(%.3f, %.3f, %.2f deg)'
             % (
+                self.pickup_name,
                 self.pickup[0],
                 self.pickup[1],
                 math.degrees(
@@ -546,17 +617,28 @@ class DeliveryMission(Node):
             )
         )
 
-        print(
-            'DELIVERY_A '
-            '(%.3f, %.3f, %.2f deg)'
-            % (
-                self.delivery[0],
-                self.delivery[1],
-                math.degrees(
-                    self.delivery[2]
-                ),
+        for index, stop in enumerate(
+            self.delivery_stops,
+            start=1
+        ):
+
+            pose = stop[
+                'pose'
+            ]
+
+            print(
+                'DELIVERY %d %s '
+                '(%.3f, %.3f, %.2f deg)'
+                % (
+                    index,
+                    stop['name'],
+                    pose[0],
+                    pose[1],
+                    math.degrees(
+                        pose[2]
+                    ),
+                )
             )
-        )
 
         print()
 
@@ -584,7 +666,7 @@ class DeliveryMission(Node):
         )
 
         if not self.navigate_with_retry(
-            'PICKUP_A',
+            self.pickup_name,
             self.pickup
         ):
 
@@ -593,8 +675,8 @@ class DeliveryMission(Node):
             )
 
             print(
-                'ABORT: failed to reach '
-                'PICKUP_A'
+                'ABORT: failed to reach %s'
+                % self.pickup_name
             )
 
             return False
@@ -621,52 +703,129 @@ class DeliveryMission(Node):
         )
 
         # ==================================================
-        # PICKUP -> DELIVERY
+        # ORDERED DELIVERY STOPS
         # ==================================================
 
-        self.set_state(
-            'NAVIGATING_TO_DELIVERY'
+        total_stops = len(
+            self.delivery_stops
         )
 
-        if not self.navigate_with_retry(
-            'DELIVERY_A',
-            self.delivery
+        for index, stop in enumerate(
+            self.delivery_stops,
+            start=1
         ):
 
+            destination_name = stop[
+                'name'
+            ]
+
+            waypoint = stop[
+                'pose'
+            ]
+
+            if total_stops == 1:
+
+                navigating_state = (
+                    'NAVIGATING_TO_DELIVERY'
+                )
+
+                arrived_state = (
+                    'AT_DELIVERY'
+                )
+
+                unloading_state = (
+                    'UNLOADING'
+                )
+
+                delivered_state = (
+                    'PARCEL_DELIVERED'
+                )
+
+            else:
+
+                navigating_state = (
+                    'NAVIGATING_TO_DELIVERY_%d_OF_%d'
+                    % (
+                        index,
+                        total_stops,
+                    )
+                )
+
+                arrived_state = (
+                    'AT_DELIVERY_%d_OF_%d'
+                    % (
+                        index,
+                        total_stops,
+                    )
+                )
+
+                unloading_state = (
+                    'UNLOADING_%d_OF_%d'
+                    % (
+                        index,
+                        total_stops,
+                    )
+                )
+
+                delivered_state = (
+                    'DELIVERY_%d_OF_%d_COMPLETE'
+                    % (
+                        index,
+                        total_stops,
+                    )
+                )
+
             self.set_state(
-                'MISSION_ABORTED'
+                navigating_state
             )
 
-            print(
-                'ABORT: failed to reach '
-                'DELIVERY_A'
+            if not self.navigate_with_retry(
+                destination_name,
+                waypoint
+            ):
+
+                self.set_state(
+                    'MISSION_ABORTED'
+                )
+
+                print(
+                    'ABORT: failed to reach delivery '
+                    'stop %d/%d: %s'
+                    % (
+                        index,
+                        total_stops,
+                        destination_name,
+                    )
+                )
+
+                return False
+
+            self.set_state(
+                arrived_state
             )
 
-            return False
+            self.set_state(
+                unloading_state
+            )
+
+            self.dwell(
+                'Unloading at %s'
+                % destination_name,
+                self.delivery_dwell
+            )
+
+            self.set_state(
+                delivered_state
+            )
+
+        if total_stops > 1:
+
+            self.set_state(
+                'ALL_DELIVERIES_COMPLETE'
+            )
 
         # ==================================================
-        # DELIVERY
-        # ==================================================
-
-        self.set_state(
-            'AT_DELIVERY'
-        )
-
-        self.set_state(
-            'UNLOADING'
-        )
-
-        self.dwell(
-            'Unloading parcel',
-            self.delivery_dwell
-        )
-
-        self.set_state(
-            'PARCEL_DELIVERED'
-        )
-
-        # ==================================================
-        # DELIVERY -> HOME
+        # LAST DELIVERY -> HOME
         # ==================================================
 
         self.set_state(
@@ -674,7 +833,7 @@ class DeliveryMission(Node):
         )
 
         if not self.navigate_with_retry(
-            'HOME',
+            self.home_name,
             self.home
         ):
 
@@ -714,7 +873,6 @@ class DeliveryMission(Node):
         )
 
         return True
-
 
 def main(args=None):
 
@@ -820,16 +978,29 @@ def main(args=None):
         finished_epoch = time.time()
         finished_at = utc_now_iso()
 
+        delivery_names = list(
+            node.delivery_names
+        )
+
         record = {
             'mission_id': mission_id,
-            'pickup': pickup_name,
-            'delivery': delivery_name,
-            'route': [
-                home_name,
-                pickup_name,
-                delivery_name,
-                home_name,
-            ],
+            'pickup': node.pickup_name,
+            'delivery': (
+                delivery_names[0]
+                if len(delivery_names) == 1
+                else None
+            ),
+            'deliveries': delivery_names,
+            'route': (
+                [
+                    node.home_name,
+                    node.pickup_name,
+                ]
+                + delivery_names
+                + [
+                    node.home_name,
+                ]
+            ),
             'status': final_status,
             'started_at': started_at,
             'finished_at': finished_at,
