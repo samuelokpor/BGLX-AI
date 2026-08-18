@@ -39,7 +39,9 @@ navigate_relative. Never compute coordinates yourself.
 - For absolute coordinates or landmarks use navigate_to or \
 navigate_to_landmark.
 - For a complete parcel delivery between named mission locations, use run_delivery_mission. Do NOT manually sequence navigate_to calls for pickup, delivery and return-home legs. Call list_delivery_locations first if the location names are uncertain. \
+- When the user asks to remember, save, teach, or record the CURRENT place specifically as a delivery pickup/drop-off/depot, use record_delivery_location. Do not use the generic mark_here tool for delivery locations. \
 - run_delivery_mission owns the complete delivery state machine and its controlled retries. Once it is running, do not duplicate its navigation legs with other movement tools. \
+- Do NOT manually navigate to HOME before run_delivery_mission. The mission tool performs any required return-to-HOME preparation itself. \
 - Use drive only after Nav2 has failed and a diagnosis says the robot must \
 reposition to escape.
 - Distances come from the USER'S REQUEST. Never take a number from these \
@@ -255,10 +257,56 @@ TOOLS = [
         },
     },
     {
+        "name": "record_delivery_location",
+        "description": (
+            "Save the robot's CURRENT map position as a persistent BGLX "
+            "delivery location. Use this when the user is physically at a "
+            "place and asks to remember it as a pickup, delivery/drop-off, "
+            "or depot. The location survives agent restarts."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "Human-readable location name, for example "
+                        "Building B or Warehouse A."
+                    ),
+                },
+                "location_type": {
+                    "type": "string",
+                    "enum": [
+                        "pickup",
+                        "delivery",
+                        "depot",
+                    ],
+                    "description": (
+                        "Role of this location in delivery missions."
+                    ),
+                },
+                "aliases": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                    },
+                    "description": (
+                        "Optional alternative natural-language names."
+                    ),
+                },
+            },
+            "required": [
+                "name",
+                "location_type",
+            ],
+        },
+    },
+    {
         "name": "list_delivery_locations",
         "description": (
-            "List the valid named locations that may be used for the "
-            "deterministic BGLX delivery mission."
+            "List BGLX delivery locations including their canonical names, "
+            "location types and friendly aliases. Use this when the user "
+            "refers to a pickup or delivery place by a natural name."
         ),
         "input_schema": {
             "type": "object",
@@ -274,7 +322,8 @@ TOOLS = [
             "location, unloads, and returns HOME. It also owns controlled "
             "navigation retries and abort handling. This tool returns after ""the mission has STARTED; it does not mean the delivery is complete. ""Use get_mission_status for progress. Use this instead of "
             "manually issuing navigate_to calls for each delivery leg. "
-            "The vehicle must begin near HOME."
+            "If the vehicle is away from HOME, the mission tool automatically "
+            "returns it to HOME before starting the pickup leg."
         ),
         "input_schema": {
             "type": "object",
@@ -282,13 +331,15 @@ TOOLS = [
                 "pickup": {
                     "type": "string",
                     "description": (
-                        "Named pickup location, for example PICKUP_A."
+                        "Pickup location name or alias, for example PICKUP_A, "
+                        "pickup a, or loading point a."
                     ),
                 },
                 "delivery": {
                     "type": "string",
                     "description": (
-                        "Named delivery location, for example DELIVERY_A."
+                        "Delivery location name or alias, for example DELIVERY_A, "
+                        "delivery a, or drop-off a."
                     ),
                 },
             },

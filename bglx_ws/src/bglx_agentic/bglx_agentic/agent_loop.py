@@ -242,6 +242,10 @@ class Agent:
             "check_low_obstacles": lambda: self.tools.check_low_obstacles(),
             "check_attitude": lambda: self.tools.check_attitude()[1],
             "list_landmarks": lambda: self.tools.list_landmarks(),
+            "record_delivery_location": lambda: self.tools.record_delivery_location(
+                args["name"],
+                args["location_type"],
+                args.get("aliases", [])),
             "list_delivery_locations": lambda: self.tools.list_delivery_locations(),
             "run_delivery_mission": lambda: self.tools.run_delivery_mission(
                 args["pickup"], args["delivery"]),
@@ -289,6 +293,7 @@ class Agent:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to_landmark",
                  "run_delivery_mission", "list_delivery_locations",
+                 "record_delivery_location",
                  "get_mission_status", "cancel_delivery_mission",
                  "navigate_relative", "navigate_to", "turn_by", "mark_here",
                  "drive", "wait", "stop", "list_landmarks",
@@ -322,6 +327,7 @@ class Agent:
             return False
         names = ("get_pose", "get_scan_summary", "navigate_to", "drive",
                  "run_delivery_mission", "list_delivery_locations",
+                 "record_delivery_location",
                  "get_mission_status", "cancel_delivery_mission",
                  "wait", "stop", "list_landmarks", "get_last_failure",
                  "navigate_relative", "turn_by", "mark_here", "check_attitude",

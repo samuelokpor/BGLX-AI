@@ -43,7 +43,13 @@ from tf2_ros import TransformException
 from .vision import VisionTool
 from .map_check import compare as compare_map, confidence_note
 from .corridor import check_corridor, can_turn_around
-from .mission_waypoints import LOCATIONS
+from .mission_waypoints import (
+    LOCATIONS,
+    resolve_location_name,
+    get_location_info,
+    format_location_registry,
+    save_custom_location,
+)
 from .observations import (summarise_scan, format_scan, SECTORS, diagnose_nav_failure,
                            MIN_TURN_RADIUS, MAX_LINEAR_VEL,
                            MIN_SPEED_FOR_YAW, max_yaw_rate)
@@ -186,8 +192,26 @@ class RobotTools(Node):
     # --- callbacks ---------------------------------------------------------
 
     def _on_mission_state(self, msg):
+        new_state = str(
+            msg.data
+        )
+
         with self._lock:
-            self._mission_state = str(msg.data)
+            old_state = self._mission_state
+            self._mission_state = new_state
+
+        # Keep the interactive agent terminal informative without
+        # restoring the verbose child-process/Nav2 log flood.
+        # Only print when the mission state actually changes.
+        if (
+            new_state
+            and new_state != old_state
+        ):
+            print(
+                "\n[mission] %s"
+                % new_state,
+                flush=True
+            )
 
     def _on_scan(self, msg):
         with self._lock:
@@ -936,15 +960,116 @@ class RobotTools(Node):
     # --- deterministic delivery mission -----------------------------------
 
     def list_delivery_locations(self):
-        """Return names accepted by the delivery mission."""
+        """Return canonical delivery locations and friendly aliases."""
 
-        names = sorted(
-            LOCATIONS.keys()
+        return (
+            "BGLX delivery locations:\n"
+            + format_location_registry()
+        )
+
+    def record_delivery_location(
+        self,
+        name,
+        location_type,
+        aliases=None
+    ):
+        """Persist the robot's current map position as a mission location."""
+
+        if self.mission_active():
+
+            return (
+                "Delivery location recording REFUSED: an active "
+                "delivery mission currently owns vehicle movement."
+            )
+
+        pose = self._pose()
+
+        if pose is None:
+
+            return (
+                "Delivery location recording FAILED: "
+                "current map pose is unavailable."
+            )
+
+        name = str(
+            name
+        ).strip()
+
+        location_type = str(
+            location_type
+        ).strip().lower()
+
+        if aliases is None:
+            aliases = []
+
+        if not isinstance(
+            aliases,
+            list
+        ):
+
+            return (
+                "Delivery location recording REFUSED: "
+                "aliases must be a list of names."
+            )
+
+        aliases = [
+            str(alias).strip()
+            for alias in aliases
+            if str(alias).strip()
+        ]
+
+        try:
+
+            canonical = save_custom_location(
+                name=name,
+                x=pose[0],
+                y=pose[1],
+                location_type=location_type,
+                aliases=aliases,
+                display_name=name,
+            )
+
+        except ValueError as exc:
+
+            return (
+                "Delivery location recording REFUSED: %s"
+                % exc
+            )
+
+        except Exception as exc:
+
+            return (
+                "Delivery location recording FAILED: %s: %s"
+                % (
+                    type(exc).__name__,
+                    exc,
+                )
+            )
+
+        info = get_location_info(
+            canonical
         )
 
         return (
-            "Named delivery locations: "
-            + ", ".join(names)
+            "DELIVERY LOCATION SAVED: %s [%s] at "
+            "(%.3f, %.3f) in map frame. "
+            "Display name: %s. Aliases: %s"
+            % (
+                canonical,
+                info['type'],
+                info['x'],
+                info['y'],
+                info.get(
+                    'display_name',
+                    canonical
+                ),
+                ', '.join(
+                    info.get(
+                        'aliases',
+                        []
+                    )
+                ) or 'none',
+            )
         )
 
     def mission_active(self):
@@ -1139,13 +1264,13 @@ class RobotTools(Node):
     ):
         """Start the deterministic delivery mission asynchronously."""
 
-        pickup = str(
+        pickup_input = str(
             pickup
-        ).strip().upper()
+        ).strip()
 
-        delivery = str(
+        delivery_input = str(
             delivery
-        ).strip().upper()
+        ).strip()
 
         if self.mission_active():
 
@@ -1155,23 +1280,75 @@ class RobotTools(Node):
                 + self.get_mission_status()
             )
 
-        if pickup not in LOCATIONS:
+        try:
+
+            pickup = resolve_location_name(
+                pickup_input
+            )
+
+        except ValueError:
 
             return (
-                "Delivery mission REFUSED: unknown pickup '%s'. %s"
+                "Delivery mission REFUSED: unknown pickup "
+                "location '%s'.\n%s"
                 % (
-                    pickup,
+                    pickup_input,
                     self.list_delivery_locations(),
                 )
             )
 
-        if delivery not in LOCATIONS:
+        try:
+
+            delivery = resolve_location_name(
+                delivery_input
+            )
+
+        except ValueError:
 
             return (
-                "Delivery mission REFUSED: unknown delivery '%s'. %s"
+                "Delivery mission REFUSED: unknown delivery "
+                "location '%s'.\n%s"
                 % (
-                    delivery,
+                    delivery_input,
                     self.list_delivery_locations(),
+                )
+            )
+
+        pickup_info = get_location_info(
+            pickup
+        )
+
+        delivery_info = get_location_info(
+            delivery
+        )
+
+        if pickup_info.get('type') != 'pickup':
+
+            return (
+                "Delivery mission REFUSED: '%s' resolves to %s, "
+                "which is a %s location, not a pickup location."
+                % (
+                    pickup_input,
+                    pickup,
+                    pickup_info.get(
+                        'type',
+                        'generic'
+                    ),
+                )
+            )
+
+        if delivery_info.get('type') != 'delivery':
+
+            return (
+                "Delivery mission REFUSED: '%s' resolves to %s, "
+                "which is a %s location, not a delivery location."
+                % (
+                    delivery_input,
+                    delivery,
+                    delivery_info.get(
+                        'type',
+                        'generic'
+                    ),
                 )
             )
 
@@ -1203,11 +1380,71 @@ class RobotTools(Node):
             > MISSION_HOME_START_TOLERANCE
         ):
 
-            return (
-                "Delivery mission REFUSED: robot is %.2fm from HOME. "
-                "Return near HOME before starting the complete "
-                "delivery mission."
+            self.get_logger().info(
+                "delivery mission requested %.2fm from HOME; "
+                "returning to HOME before mission start"
                 % home_distance
+            )
+
+            print(
+                "\n[mission] PREPARING_AT_HOME",
+                flush=True
+            )
+
+            # Approach HOME along the direction of travel from the
+            # current position. This keeps the preparation movement
+            # compatible with the tricycle geometry rather than
+            # imposing an arbitrary final heading.
+            home_yaw = math.atan2(
+                hy - pose[1],
+                hx - pose[0]
+            )
+
+            home_result = self.navigate_to(
+                hx,
+                hy,
+                home_yaw
+            )
+
+            pose = self._pose()
+
+            if pose is None:
+
+                return (
+                    "Delivery mission REFUSED: automatic return "
+                    "to HOME finished but the robot pose is "
+                    "unavailable. "
+                    + str(home_result)
+                )
+
+            home_distance = math.hypot(
+                pose[0] - hx,
+                pose[1] - hy
+            )
+
+            if (
+                home_distance
+                > MISSION_HOME_START_TOLERANCE
+            ):
+
+                return (
+                    "Delivery mission REFUSED: automatic return "
+                    "to HOME did not succeed. Robot remains %.2fm "
+                    "from HOME. %s"
+                    % (
+                        home_distance,
+                        home_result,
+                    )
+                )
+
+            self.get_logger().info(
+                "robot prepared at HOME; starting "
+                "deterministic delivery mission"
+            )
+
+            print(
+                "\n[mission] READY_AT_HOME",
+                flush=True
             )
 
         upright, attitude = (
