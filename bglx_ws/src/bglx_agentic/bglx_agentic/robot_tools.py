@@ -62,6 +62,7 @@ FOOTPRINT_FORWARD_REACH = 1.25
 NAV_TIMEOUT = 180.0
 MISSION_HOME_START_TOLERANCE = 1.0
 MISSION_TOOL_TIMEOUT = 900.0
+MISSION_LOG_PATH = os.path.expanduser('~/.bglx/mission_latest.log')
 LOCAL_COSTMAP_LETHAL = 90      # occupancy 0..100; >= this counts as an obstacle
 COSTMAP_SENSE_MAX_RANGE = 6.0  # m: how far to ray-march the costmap per sector
 REVERSE_STRAIGHT_MAX = 5.0      # m: reverse <= this goes straight-back, no reorientation
@@ -1110,6 +1111,13 @@ class RobotTools(Node):
                 )
             )
 
+        # Cancellation is authoritative at the agent layer. The child
+        # process may have been interrupted between two mission-state
+        # publications, so do not leave the previous state (for example
+        # UNLOADING or NAVIGATING_TO_DELIVERY) looking current.
+        with self._lock:
+            self._mission_state = 'MISSION_INTERRUPTED'
+
         # Final zero command as a belt-and-suspenders stop.
         self.cmd_pub.publish(
             Twist()
@@ -1257,10 +1265,30 @@ class RobotTools(Node):
 
         try:
 
-            self._mission_proc = subprocess.Popen(
-                cmd,
-                start_new_session=True
+            # Keep the asynchronous mission's verbose Nav2/state output
+            # away from the interactive agent prompt. The latest mission
+            # always gets its own clean log file.
+            os.makedirs(
+                os.path.dirname(MISSION_LOG_PATH),
+                exist_ok=True
             )
+
+            mission_env = os.environ.copy()
+            mission_env['PYTHONUNBUFFERED'] = '1'
+
+            with open(
+                MISSION_LOG_PATH,
+                'w',
+                buffering=1
+            ) as mission_log:
+
+                self._mission_proc = subprocess.Popen(
+                    cmd,
+                    stdout=mission_log,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                    env=mission_env
+                )
 
         except FileNotFoundError:
 
@@ -1289,10 +1317,12 @@ class RobotTools(Node):
             "The deterministic mission controller now owns "
             "vehicle movement. Do not issue manual movement "
             "commands while it is active. Use "
-            "get_mission_status to check progress."
+            "get_mission_status to check progress. "
+            "Detailed mission output is being written to %s."
             % (
                 pickup,
                 delivery,
+                MISSION_LOG_PATH,
             )
         )
 
