@@ -462,7 +462,17 @@ def save_custom_location(
     aliases=None,
     display_name=None,
 ):
-    """Persist a new operator-defined mission location."""
+    """
+    Persist a NEW operator-defined mission location.
+
+    Safety rules:
+      - built-in locations cannot be overwritten;
+      - existing custom locations cannot be overwritten accidentally;
+      - canonical names, display names and aliases must not collide
+        with any existing location;
+      - validation happens before touching the persistent YAML file;
+      - the final YAML replacement is atomic.
+    """
 
     canonical = _canonical_name(
         name
@@ -499,29 +509,139 @@ def save_custom_location(
             )
         )
 
+    x = float(
+        x
+    )
+
+    y = float(
+        y
+    )
+
     if aliases is None:
         aliases = []
 
-    aliases = [
-        str(a).strip()
-        for a in aliases
-        if str(a).strip()
-    ]
+    # Normalise / de-duplicate aliases while preserving
+    # the operator-facing spelling.
+    cleaned_aliases = []
+    seen_aliases = set()
+
+    for alias in aliases:
+
+        alias = str(
+            alias
+        ).strip()
+
+        if not alias:
+            continue
+
+        key = _normalise_name(
+            alias
+        )
+
+        if key in seen_aliases:
+            continue
+
+        seen_aliases.add(
+            key
+        )
+
+        cleaned_aliases.append(
+            alias
+        )
+
+    aliases = cleaned_aliases
+
+    if display_name:
+
+        display_name = str(
+            display_name
+        ).strip()
+
+    else:
+
+        display_name = canonical.replace(
+            '_',
+            ' '
+        ).title()
 
     custom = _load_custom_locations()
 
+    # Recording a location is intentionally CREATE-ONLY.
+    #
+    # A separate explicit update operation can be added later.
+    # This prevents:
+    #
+    #   "record this place as Building B"
+    #
+    # from silently moving an established delivery point.
+    if canonical in custom:
+
+        raise ValueError(
+            "Custom location '%s' already exists. "
+            "It was NOT overwritten."
+            % canonical
+        )
+
+    # ------------------------------------------------------
+    # TRANSACTIONAL ALIAS VALIDATION
+    # ------------------------------------------------------
+    #
+    # Validate everything the new location will add to the
+    # global alias namespace BEFORE writing the YAML file.
+    # ------------------------------------------------------
+
+    candidates = [
+        canonical,
+        display_name,
+    ]
+
+    candidates.extend(
+        aliases
+    )
+
+    checked = set()
+
+    for candidate in candidates:
+
+        key = _normalise_name(
+            candidate
+        )
+
+        if not key:
+            continue
+
+        # Duplicate names belonging to this same new location
+        # are harmless, e.g.:
+        #
+        # BUILDING_B
+        # Building B
+        if key in checked:
+            continue
+
+        checked.add(
+            key
+        )
+
+        owner = _ALIAS_INDEX.get(
+            key
+        )
+
+        if owner is not None:
+
+            raise ValueError(
+                "Location name/alias '%s' conflicts with "
+                "existing location %s. Nothing was saved."
+                % (
+                    candidate,
+                    owner,
+                )
+            )
+
     custom[canonical] = {
-        'x': float(x),
-        'y': float(y),
+        'x': x,
+        'y': y,
         'type': location_type,
-        'display_name': (
-            str(display_name).strip()
-            if display_name
-            else canonical.replace(
-                '_',
-                ' '
-            ).title()
-        ),
+        'display_name': display_name,
         'description': (
             'User-defined BGLX delivery location.'
         ),
@@ -537,21 +657,333 @@ def save_custom_location(
         exist_ok=True
     )
 
-    with open(
-        CUSTOM_LOCATIONS_FILE,
-        'w'
-    ) as f:
+    # ------------------------------------------------------
+    # ATOMIC PERSISTENCE
+    # ------------------------------------------------------
+    #
+    # Write to a temporary file in the same directory and
+    # replace the real registry only after the complete YAML
+    # has been successfully written.
+    # ------------------------------------------------------
 
-        yaml.safe_dump(
-            custom,
-            f,
-            sort_keys=True
+    temp_path = (
+        CUSTOM_LOCATIONS_FILE
+        + '.tmp.%d'
+        % os.getpid()
+    )
+
+    try:
+
+        with open(
+            temp_path,
+            'w'
+        ) as f:
+
+            yaml.safe_dump(
+                custom,
+                f,
+                sort_keys=True
+            )
+
+            f.flush()
+
+            os.fsync(
+                f.fileno()
+            )
+
+        os.replace(
+            temp_path,
+            CUSTOM_LOCATIONS_FILE
         )
+
+    finally:
+
+        if os.path.exists(
+            temp_path
+        ):
+
+            os.remove(
+                temp_path
+            )
 
     reload_location_registry()
 
     return canonical
 
+
+def _write_custom_locations_atomic(custom):
+    """Atomically replace the persistent custom-location registry."""
+
+    directory = os.path.dirname(
+        CUSTOM_LOCATIONS_FILE
+    )
+
+    if directory:
+
+        os.makedirs(
+            directory,
+            exist_ok=True
+        )
+
+    temp_path = (
+        CUSTOM_LOCATIONS_FILE
+        + '.tmp.%d'
+        % os.getpid()
+    )
+
+    try:
+
+        with open(
+            temp_path,
+            'w'
+        ) as f:
+
+            yaml.safe_dump(
+                custom,
+                f,
+                sort_keys=True
+            )
+
+            f.flush()
+
+            os.fsync(
+                f.fileno()
+            )
+
+        os.replace(
+            temp_path,
+            CUSTOM_LOCATIONS_FILE
+        )
+
+    finally:
+
+        if os.path.exists(
+            temp_path
+        ):
+
+            os.remove(
+                temp_path
+            )
+
+
+def update_custom_location(
+    name,
+    x=None,
+    y=None,
+    location_type=None,
+    aliases=None,
+    display_name=None,
+):
+    """
+    Explicitly update an existing CUSTOM mission location.
+
+    Unspecified fields retain their existing values.
+
+    Built-in locations are immutable.
+    """
+
+    canonical = resolve_location_name(
+        name
+    )
+
+    if canonical in BUILTIN_LOCATION_REGISTRY:
+
+        raise ValueError(
+            "Built-in location '%s' cannot be updated."
+            % canonical
+        )
+
+    custom = _load_custom_locations()
+
+    if canonical not in custom:
+
+        raise ValueError(
+            "Location '%s' is not a user-defined location."
+            % canonical
+        )
+
+    current = dict(
+        custom[canonical]
+    )
+
+    if x is not None:
+        current['x'] = float(
+            x
+        )
+
+    if y is not None:
+        current['y'] = float(
+            y
+        )
+
+    if location_type is not None:
+
+        location_type = str(
+            location_type
+        ).strip().lower()
+
+        if location_type not in VALID_LOCATION_TYPES:
+
+            raise ValueError(
+                "Invalid location type '%s'. Valid types: %s"
+                % (
+                    location_type,
+                    ', '.join(
+                        sorted(
+                            VALID_LOCATION_TYPES
+                        )
+                    ),
+                )
+            )
+
+        current['type'] = location_type
+
+    if display_name is not None:
+
+        display_name = str(
+            display_name
+        ).strip()
+
+        if not display_name:
+
+            raise ValueError(
+                'Display name cannot be empty.'
+            )
+
+        current['display_name'] = display_name
+
+    if aliases is not None:
+
+        cleaned_aliases = []
+        seen_aliases = set()
+
+        for alias in aliases:
+
+            alias = str(
+                alias
+            ).strip()
+
+            if not alias:
+                continue
+
+            key = _normalise_name(
+                alias
+            )
+
+            if key in seen_aliases:
+                continue
+
+            seen_aliases.add(
+                key
+            )
+
+            cleaned_aliases.append(
+                alias
+            )
+
+        current['aliases'] = cleaned_aliases
+
+    # Validate the resulting alias namespace BEFORE writing.
+    candidates = [
+        canonical,
+        current.get(
+            'display_name',
+            canonical
+        ),
+    ]
+
+    candidates.extend(
+        current.get(
+            'aliases',
+            []
+        )
+    )
+
+    checked = set()
+
+    for candidate in candidates:
+
+        key = _normalise_name(
+            candidate
+        )
+
+        if not key:
+            continue
+
+        if key in checked:
+            continue
+
+        checked.add(
+            key
+        )
+
+        owner = _ALIAS_INDEX.get(
+            key
+        )
+
+        # Existing aliases belonging to THIS location
+        # are allowed during an explicit update.
+        if (
+            owner is not None
+            and owner != canonical
+        ):
+
+            raise ValueError(
+                "Location name/alias '%s' conflicts with "
+                "existing location %s. Nothing was changed."
+                % (
+                    candidate,
+                    owner,
+                )
+            )
+
+    custom[canonical] = current
+
+    _write_custom_locations_atomic(
+        custom
+    )
+
+    reload_location_registry()
+
+    return canonical
+
+
+def delete_custom_location(name):
+    """
+    Delete an existing user-defined mission location.
+
+    Built-in mission locations cannot be deleted.
+    """
+
+    canonical = resolve_location_name(
+        name
+    )
+
+    if canonical in BUILTIN_LOCATION_REGISTRY:
+
+        raise ValueError(
+            "Built-in location '%s' cannot be deleted."
+            % canonical
+        )
+
+    custom = _load_custom_locations()
+
+    if canonical not in custom:
+
+        raise ValueError(
+            "Location '%s' is not a user-defined location."
+            % canonical
+        )
+
+    del custom[canonical]
+
+    _write_custom_locations_atomic(
+        custom
+    )
+
+    reload_location_registry()
+
+    return canonical
 
 def arrival_pose(
     source_name,

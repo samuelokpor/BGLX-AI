@@ -40,6 +40,8 @@ navigate_relative. Never compute coordinates yourself.
 navigate_to_landmark.
 - For a complete parcel delivery between named mission locations, use run_delivery_mission. Do NOT manually sequence navigate_to calls for pickup, delivery and return-home legs. Call list_delivery_locations first if the location names are uncertain. \
 - When the user asks to remember, save, teach, or record the CURRENT place specifically as a delivery pickup/drop-off/depot, use record_delivery_location. Do not use the generic mark_here tool for delivery locations. \
+- When the user explicitly asks to move/update/correct an EXISTING saved delivery location to the robot's CURRENT position, use update_delivery_location. Do not use record_delivery_location for an existing location. \
+- When the user explicitly asks to forget/delete/remove a saved CUSTOM delivery location, use delete_delivery_location. Never delete a location merely because it is unused or inconvenient. \
 - run_delivery_mission owns the complete delivery state machine and its controlled retries. Once it is running, do not duplicate its navigation legs with other movement tools. \
 - Do NOT manually navigate to HOME before run_delivery_mission. The mission tool performs any required return-to-HOME preparation itself. \
 - Use drive only after Nav2 has failed and a diagnosis says the robot must \
@@ -301,6 +303,57 @@ TOOLS = [
             ],
         },
     },
+
+    {
+        "name": "update_delivery_location",
+        "description": (
+            "Explicitly update an EXISTING user-defined BGLX delivery "
+            "location so its coordinates become the robot's CURRENT map "
+            "position. Use only when the user asks to update, move, or "
+            "correct an already saved delivery location. Built-in locations "
+            "cannot be updated. Existing type and aliases are preserved."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "Existing saved custom delivery location name "
+                        "or alias, for example Building B."
+                    ),
+                },
+            },
+            "required": [
+                "name",
+            ],
+        },
+    },
+    {
+        "name": "delete_delivery_location",
+        "description": (
+            "Delete/forget an EXISTING user-defined BGLX delivery "
+            "location. Use ONLY when the user explicitly asks to forget, "
+            "delete, or remove that saved location. Built-in locations "
+            "such as HOME cannot be deleted."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "Existing saved custom delivery location name "
+                        "or alias to forget."
+                    ),
+                },
+            },
+            "required": [
+                "name",
+            ],
+        },
+    },
+
     {
         "name": "list_delivery_locations",
         "description": (

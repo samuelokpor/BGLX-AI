@@ -246,6 +246,10 @@ class Agent:
                 args["name"],
                 args["location_type"],
                 args.get("aliases", [])),
+            "update_delivery_location": lambda: self.tools.update_delivery_location(
+                args["name"]),
+            "delete_delivery_location": lambda: self.tools.delete_delivery_location(
+                args["name"]),
             "list_delivery_locations": lambda: self.tools.list_delivery_locations(),
             "run_delivery_mission": lambda: self.tools.run_delivery_mission(
                 args["pickup"], args["delivery"]),
@@ -294,6 +298,7 @@ class Agent:
         names = ("get_pose", "get_scan_summary", "navigate_to_landmark",
                  "run_delivery_mission", "list_delivery_locations",
                  "record_delivery_location",
+                 "update_delivery_location", "delete_delivery_location",
                  "get_mission_status", "cancel_delivery_mission",
                  "navigate_relative", "navigate_to", "turn_by", "mark_here",
                  "drive", "wait", "stop", "list_landmarks",
@@ -328,6 +333,7 @@ class Agent:
         names = ("get_pose", "get_scan_summary", "navigate_to", "drive",
                  "run_delivery_mission", "list_delivery_locations",
                  "record_delivery_location",
+                 "update_delivery_location", "delete_delivery_location",
                  "get_mission_status", "cancel_delivery_mission",
                  "wait", "stop", "list_landmarks", "get_last_failure",
                  "navigate_relative", "turn_by", "mark_here", "check_attitude",

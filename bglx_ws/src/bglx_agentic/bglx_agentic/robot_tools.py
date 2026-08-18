@@ -49,6 +49,8 @@ from .mission_waypoints import (
     get_location_info,
     format_location_registry,
     save_custom_location,
+    update_custom_location,
+    delete_custom_location,
 )
 from .observations import (summarise_scan, format_scan, SECTORS, diagnose_nav_failure,
                            MIN_TURN_RADIUS, MAX_LINEAR_VEL,
@@ -1070,6 +1072,128 @@ class RobotTools(Node):
                     )
                 ) or 'none',
             )
+        )
+
+
+    def update_delivery_location(
+        self,
+        name
+    ):
+        """
+        Explicitly move an existing custom delivery location
+        to the robot's CURRENT map position.
+
+        Existing type, display name and aliases are preserved.
+        """
+
+        if self.mission_active():
+
+            return (
+                "Delivery location update REFUSED: an active "
+                "delivery mission currently owns vehicle movement."
+            )
+
+        pose = self._pose()
+
+        if pose is None:
+
+            return (
+                "Delivery location update FAILED: "
+                "current map pose is unavailable."
+            )
+
+        name = str(
+            name
+        ).strip()
+
+        if not name:
+
+            return (
+                "Delivery location update REFUSED: "
+                "location name cannot be empty."
+            )
+
+        try:
+
+            canonical = update_custom_location(
+                name=name,
+                x=pose[0],
+                y=pose[1],
+            )
+
+            info = get_location_info(
+                canonical
+            )
+
+        except ValueError as exc:
+
+            return (
+                "Delivery location update REFUSED: %s"
+                % exc
+            )
+
+        return (
+            "DELIVERY LOCATION UPDATED: "
+            "%s [%s] is now at (%.3f, %.3f) "
+            "in map frame. Display name: %s."
+            % (
+                canonical,
+                info['type'],
+                info['x'],
+                info['y'],
+                info.get(
+                    'display_name',
+                    canonical
+                ),
+            )
+        )
+
+
+    def delete_delivery_location(
+        self,
+        name
+    ):
+        """
+        Explicitly forget an existing custom delivery location.
+
+        Built-in locations remain protected by the registry layer.
+        """
+
+        if self.mission_active():
+
+            return (
+                "Delivery location deletion REFUSED: an active "
+                "delivery mission currently owns vehicle movement."
+            )
+
+        name = str(
+            name
+        ).strip()
+
+        if not name:
+
+            return (
+                "Delivery location deletion REFUSED: "
+                "location name cannot be empty."
+            )
+
+        try:
+
+            canonical = delete_custom_location(
+                name
+            )
+
+        except ValueError as exc:
+
+            return (
+                "Delivery location deletion REFUSED: %s"
+                % exc
+            )
+
+        return (
+            "DELIVERY LOCATION DELETED: %s. "
+            "The saved custom location has been forgotten."
+            % canonical
         )
 
     def mission_active(self):
