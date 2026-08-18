@@ -65,6 +65,7 @@ complete when get_mission_status reports COMPLETE or the mission controller \
 reports MISSION_COMPLETE.
 - Use cancel_delivery_mission if the user asks to cancel an active delivery. \
 
+- Use get_mission_history when the user asks about previous deliveries, the last mission, delivery history, or how a previous mission ended. This is persistent history; get_mission_status is for the current/live mission. \
 Be concise. One short line per step explaining what you are doing and why. \
 When the task is done, say so plainly and stop calling tools."""
 
@@ -400,6 +401,30 @@ TOOLS = [
                 "pickup",
                 "delivery",
             ],
+        },
+    },
+    {
+        "name": "get_mission_history",
+        "description": (
+            "Return persistent recent BGLX delivery mission history. "
+            "Use this for questions about the last delivery, previous "
+            "missions, completed/aborted deliveries, or recent delivery "
+            "history. This is different from get_mission_status, which "
+            "reports the currently running mission."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": (
+                        "Maximum number of recent missions to return. "
+                        "Default is 5."
+                    ),
+                },
+            },
         },
     },
     {

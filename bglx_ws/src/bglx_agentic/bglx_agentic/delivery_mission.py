@@ -12,6 +12,11 @@ from nav2_msgs.action import NavigateToPose
 from std_msgs.msg import String
 
 from bglx_agentic.mission_waypoints import build_delivery_route
+from bglx_agentic.mission_history import (
+    append_mission_record,
+    new_mission_id,
+    utc_now_iso,
+)
 
 
 def quat_from_yaw(yaw):
@@ -719,9 +724,52 @@ def main(args=None):
 
     success = False
 
+    mission_id = new_mission_id()
+
+    started_epoch = time.time()
+    started_at = utc_now_iso()
+
+    home_name = str(
+        node.get_parameter(
+            'home_name'
+        ).value
+    )
+
+    pickup_name = str(
+        node.get_parameter(
+            'pickup_name'
+        ).value
+    )
+
+    delivery_name = str(
+        node.get_parameter(
+            'delivery_name'
+        ).value
+    )
+
+    final_status = 'MISSION_ABORTED'
+    error_text = None
+
+    print(
+        'MISSION ID: %s'
+        % mission_id
+    )
+
     try:
 
         success = node.run_mission()
+
+        if success:
+
+            final_status = (
+                'MISSION_COMPLETE'
+            )
+
+        else:
+
+            final_status = (
+                'MISSION_ABORTED'
+            )
 
     except KeyboardInterrupt:
 
@@ -736,12 +784,28 @@ def main(args=None):
             'MISSION_INTERRUPTED'
         )
 
+        final_status = (
+            'MISSION_INTERRUPTED'
+        )
+
     except Exception as exc:
 
         node.cancel_active_goal()
 
         node.set_state(
             'MISSION_ABORTED'
+        )
+
+        final_status = (
+            'MISSION_ABORTED'
+        )
+
+        error_text = (
+            '%s: %s'
+            % (
+                type(exc).__name__,
+                exc,
+            )
         )
 
         node.get_logger().error(
@@ -753,13 +817,69 @@ def main(args=None):
 
         node.cancel_active_goal()
 
+        finished_epoch = time.time()
+        finished_at = utc_now_iso()
+
+        record = {
+            'mission_id': mission_id,
+            'pickup': pickup_name,
+            'delivery': delivery_name,
+            'route': [
+                home_name,
+                pickup_name,
+                delivery_name,
+                home_name,
+            ],
+            'status': final_status,
+            'started_at': started_at,
+            'finished_at': finished_at,
+            'duration_sec': round(
+                max(
+                    0.0,
+                    finished_epoch
+                    - started_epoch
+                ),
+                3
+            ),
+        }
+
+        if error_text is not None:
+
+            record['error'] = (
+                error_text
+            )
+
+        try:
+
+            append_mission_record(
+                record
+            )
+
+            print(
+                'MISSION HISTORY SAVED: %s'
+                % mission_id
+            )
+
+        except Exception as history_exc:
+
+            node.get_logger().error(
+                'Failed to save mission history: '
+                '%s: %s'
+                % (
+                    type(
+                        history_exc
+                    ).__name__,
+                    history_exc,
+                )
+            )
+
         node.destroy_node()
 
         rclpy.shutdown()
 
     if not success:
-        raise SystemExit(1)
 
+        raise SystemExit(1)
 
 if __name__ == '__main__':
     main()

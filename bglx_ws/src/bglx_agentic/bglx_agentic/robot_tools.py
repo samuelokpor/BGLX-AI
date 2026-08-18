@@ -52,6 +52,7 @@ from .mission_waypoints import (
     update_custom_location,
     delete_custom_location,
 )
+from .mission_history import format_mission_history
 from .observations import (summarise_scan, format_scan, SECTORS, diagnose_nav_failure,
                            MIN_TURN_RADIUS, MAX_LINEAR_VEL,
                            MIN_SPEED_FOR_YAW, max_yaw_rate)
@@ -1194,6 +1195,35 @@ class RobotTools(Node):
             "DELIVERY LOCATION DELETED: %s. "
             "The saved custom location has been forgotten."
             % canonical
+        )
+
+
+    def get_mission_history(
+        self,
+        limit=5
+    ):
+        """Return persistent recent delivery mission history."""
+
+        try:
+
+            limit = int(
+                limit
+            )
+
+        except Exception:
+
+            limit = 5
+
+        limit = max(
+            1,
+            min(
+                limit,
+                20
+            )
+        )
+
+        return format_mission_history(
+            limit=limit
         )
 
     def mission_active(self):

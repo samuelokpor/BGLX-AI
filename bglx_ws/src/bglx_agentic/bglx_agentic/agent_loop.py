@@ -254,6 +254,7 @@ class Agent:
             "run_delivery_mission": lambda: self.tools.run_delivery_mission(
                 args["pickup"], args["delivery"]),
             "get_mission_status": lambda: self.tools.get_mission_status(),
+            "get_mission_history": lambda: self.tools.get_mission_history(args.get("limit", 5)),
             "cancel_delivery_mission": lambda: self.tools.cancel_delivery_mission(),
             "navigate_to": lambda: self.tools.navigate_to(
                 args["x"], args["y"], args.get("yaw")),
@@ -299,7 +300,7 @@ class Agent:
                  "run_delivery_mission", "list_delivery_locations",
                  "record_delivery_location",
                  "update_delivery_location", "delete_delivery_location",
-                 "get_mission_status", "cancel_delivery_mission",
+                 "get_mission_status", "get_mission_history", "cancel_delivery_mission",
                  "navigate_relative", "navigate_to", "turn_by", "mark_here",
                  "drive", "wait", "stop", "list_landmarks",
                  "get_last_failure", "check_attitude", "check_systems", "look",
@@ -334,7 +335,7 @@ class Agent:
                  "run_delivery_mission", "list_delivery_locations",
                  "record_delivery_location",
                  "update_delivery_location", "delete_delivery_location",
-                 "get_mission_status", "cancel_delivery_mission",
+                 "get_mission_status", "get_mission_history", "cancel_delivery_mission",
                  "wait", "stop", "list_landmarks", "get_last_failure",
                  "navigate_relative", "turn_by", "mark_here", "check_attitude",
                  "navigate_to_landmark")
