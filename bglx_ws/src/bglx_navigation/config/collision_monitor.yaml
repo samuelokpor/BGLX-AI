@@ -5,9 +5,10 @@ collision_monitor:
     base_frame_id: "base_link"
     odom_frame_id: "odom"
 
-    # ISOLATED TEST TOPICS.
-    # These are deliberately NOT connected to the real robot controller.
+    # Nav2 / agent commands enter here.
     cmd_vel_in_topic: "/etrike/cmd_vel"
+
+    # Safe command continues to the BGLX final limiter.
     cmd_vel_out_topic: "/etrike/collision_checked_cmd_vel"
 
     transform_tolerance: 0.5
@@ -15,165 +16,72 @@ collision_monitor:
     base_shift_correction: true
     stop_pub_timeout: 1.0
 
-    # Two safety zones:
+    # ----------------------------------------------------------
+    # HUMBLE DIRECTION-AWARE COLLISION PROTECTION
+    # ----------------------------------------------------------
     #
-    # FrontStop:
-    #   immediate protective region.
+    # Previous configuration used independent FrontStop,
+    # RearStop, LeftStop and RightStop polygons.
     #
-    # FrontSlow:
-    #   larger region for slowing near people / obstacles.
-    polygons: ["LeftStop", "RightStop", "RearStop", "FrontStop", "LeftSlow", "RightSlow", "RearSlow", "FrontSlow"]
-    FrontStop:
+    # Static STOP polygons trigger regardless of whether the
+    # requested velocity is moving toward or away from the
+    # obstacle. That can trap an Ackermann/tricycle robot:
+    #
+    # obstacle ahead -> FrontStop -> reverse also becomes zero.
+    #
+    # The Approach model instead projects the robot footprint
+    # along the requested Twist and limits velocity according
+    # to predicted time-to-collision.
+    #
+    # The final cmd_vel_limiter remains downstream as the
+    # independent hard-stop / watchdog layer.
+    # ----------------------------------------------------------
+
+    polygons: ["FootprintApproach"]
+
+    FootprintApproach:
       type: "polygon"
+      action_type: "approach"
 
-      # base_link coordinates:
-      # front = +2.05 m
-      # rear  = -0.30 m
-      # sides = +/-0.55 m
-      points: [
-        2.05,  0.55,
-        2.05, -0.55,
-       -0.30, -0.55,
-       -0.30,  0.55
-      ]
+      # Use the same footprint Nav2 is actually planning with.
+      footprint_topic: "/local_costmap/published_footprint"
 
-      action_type: "stop"
-      max_points: 2
-      visualize: true
-      polygon_pub_topic: "/etrike/front_stop_polygon"
-      enabled: true
+      # Begin progressively restricting a command when the
+      # predicted footprint collision is inside this horizon.
+      time_before_collision: 1.5
 
+      # Simulation integration step used by Collision Monitor.
+      simulation_time_step: 0.05
 
-    FrontSlow:
-      type: "polygon"
-
-      # Larger outer zone.
-      points: [
-        3.00,  0.90,
-        3.00, -0.90,
-       -0.30, -0.90,
-       -0.30,  0.90
-      ]
-
-      action_type: "slowdown"
+      # ROS 2 Humble uses max_points rather than the newer
+      # min_points parameter.
       max_points: 2
 
-      # Output 35% of requested velocity while active.
-      slowdown_ratio: 0.35
-
       visualize: true
-      polygon_pub_topic: "/etrike/front_slow_polygon"
-      enabled: true
+      polygon_pub_topic: "/etrike/footprint_approach_polygon"
 
+    # ----------------------------------------------------------
+    # SENSOR SOURCES
+    # ----------------------------------------------------------
 
-    # --------------------------------------------------
-    # Side proximity protection.
-    # Robot footprint lateral edges are y = +/-0.40 m.
-    # --------------------------------------------------
+    observation_sources:
+      - "front_scan"
+      - "left_scan"
+      - "right_scan"
+      - "rear_scan"
 
-    LeftStop:
-      type: "polygon"
-      points: [
-         1.25,  0.75,
-         1.25,  0.40,
-        -0.30,  0.40,
-        -0.30,  0.75
-      ]
-      action_type: "stop"
-      max_points: 2
-      visualize: true
-      polygon_pub_topic: "/etrike/left_stop_polygon"
-      enabled: true
-
-    RightStop:
-      type: "polygon"
-      points: [
-         1.25, -0.40,
-         1.25, -0.75,
-        -0.30, -0.75,
-        -0.30, -0.40
-      ]
-      action_type: "stop"
-      max_points: 2
-      visualize: true
-      polygon_pub_topic: "/etrike/right_stop_polygon"
-      enabled: true
-
-    LeftSlow:
-      type: "polygon"
-      points: [
-         1.25,  1.20,
-         1.25,  0.40,
-        -0.30,  0.40,
-        -0.30,  1.20
-      ]
-      action_type: "slowdown"
-      max_points: 2
-      slowdown_ratio: 0.35
-      visualize: true
-      polygon_pub_topic: "/etrike/left_slow_polygon"
-      enabled: true
-
-    RightSlow:
-      type: "polygon"
-      points: [
-         1.25, -0.40,
-         1.25, -1.20,
-        -0.30, -1.20,
-        -0.30, -0.40
-      ]
-      action_type: "slowdown"
-      max_points: 2
-      slowdown_ratio: 0.35
-      visualize: true
-      polygon_pub_topic: "/etrike/right_slow_polygon"
-      enabled: true
-    RearStop:
-      type: "polygon"
-      points: [
-        -0.30,  0.55,
-        -0.30, -0.55,
-        -1.00, -0.55,
-        -1.00,  0.55
-      ]
-      action_type: "stop"
-      max_points: 2
-      visualize: true
-      polygon_pub_topic: "/etrike/rear_stop_polygon"
-      enabled: true
-
-    RearSlow:
-      type: "polygon"
-      points: [
-        -0.30,  0.90,
-        -0.30, -0.90,
-        -1.60, -0.90,
-        -1.60,  0.90
-      ]
-      action_type: "slowdown"
-      max_points: 2
-      slowdown_ratio: 0.35
-      visualize: true
-      polygon_pub_topic: "/etrike/rear_slow_polygon"
-      enabled: true
-
-    observation_sources: ["front_scan", "left_scan", "right_scan", "rear_scan"]
     front_scan:
       type: "scan"
       topic: "/etrike/front_scan"
-      enabled: true
 
     left_scan:
       type: "scan"
       topic: "/etrike/left_depth/scan"
-      enabled: true
 
     right_scan:
       type: "scan"
       topic: "/etrike/right_depth/scan"
-      enabled: true
 
     rear_scan:
       type: "scan"
       topic: "/etrike/rear_depth/scan"
-      enabled: true
