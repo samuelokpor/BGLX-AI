@@ -450,7 +450,7 @@ class TerrainDetector(Node):
         depth[
             (~np.isfinite(depth)) |
             (depth < 0.15) |
-            (depth > 4.0)
+            (depth > 6.0)
         ] = np.nan
 
         self.latest_depth = depth

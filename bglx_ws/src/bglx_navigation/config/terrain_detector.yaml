@@ -15,7 +15,7 @@ terrain_detector:
 
     # Forward terrain region
     x_min: 1.30
-    x_max: 4.00
+    x_max: 5.50
     fit_half_width: 1.25
     corridor_half_width: 0.70
 
