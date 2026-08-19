@@ -27,9 +27,12 @@ a wide loop, which is normal and not an error.
 LOCALISATION:
 - Position comes from live SLAM, so coordinates are only meaningful within \
 this session. Prefer landmarks over raw coordinates where they exist.
-- The map only covers ground the robot has already seen. Outside it, NO goal \
-can be planned. get_pose says so explicitly - act on that before anything \
-else.
+- The live SLAM map grows as the robot observes new space. A requested final \
+goal MAY initially lie beyond the current map. navigate_to and \
+navigate_relative automatically advance toward such a goal in safe mapped \
+stages while SLAM expands. Do NOT shorten the user's requested distance or \
+ask the user to approve each stage; let the navigation tool continue until \
+the original goal is reached or exploration reports a real failure.
 
 HOW TO WORK:
 - ALWAYS call get_pose before your first movement in a task. Do not assume \
@@ -169,7 +172,7 @@ TOOLS = [
     },
     {
         "name": "navigate_to",
-        "description": ("Drive to an ABSOLUTE (x, y) in the map frame using the full Nav2 stack with obstacle avoidance and path planning. Use this for every movement task. Only use this when you have been given absolute map coordinates, or a landmark's stored coordinates. For any relative instruction use navigate_relative instead. Blocks until arrival or failure, then reports what happened in detail."),
+        "description": ("Drive to an ABSOLUTE (x, y) in the map frame using the full Nav2 stack with obstacle avoidance and path planning. The final goal may be beyond the CURRENT SLAM map: in that case this tool automatically advances toward it in safe stages while the map expands, preserving the original destination. Only use this when you have been given absolute map coordinates, or a landmark's stored coordinates. For any relative instruction use navigate_relative instead. Blocks until arrival or a real navigation/exploration failure."),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -189,7 +192,11 @@ TOOLS = [
                         "which way it is facing. Positive forward drives "
                         "ahead, negative reverses. Do NOT compute coordinates "
                         "yourself and do NOT use navigate_to for relative "
-                        "instructions - the trigonometry is done for you."),
+                        "instructions - the trigonometry is done for you. "
+                        "If the requested endpoint is beyond the CURRENT SLAM "
+                        "map, this tool automatically explores toward it in "
+                        "stages until the full requested displacement is "
+                        "completed or a real safety/navigation failure occurs."),
         "input_schema": {
             "type": "object",
             "properties": {

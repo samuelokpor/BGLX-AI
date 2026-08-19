@@ -5,11 +5,22 @@ import time
 
 import rclpy
 from rclpy.action import ActionClient
+from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.qos import (
+    QoSProfile,
+    ReliabilityPolicy,
+    HistoryPolicy,
+    DurabilityPolicy,
+)
 
 from action_msgs.msg import GoalStatus
+from nav_msgs.msg import OccupancyGrid
 from nav2_msgs.action import NavigateToPose
 from std_msgs.msg import String
+
+import tf2_ros
+from tf2_ros import TransformException
 
 from bglx_agentic.mission_waypoints import (
     build_delivery_route,
@@ -20,6 +31,27 @@ from bglx_agentic.mission_history import (
     new_mission_id,
     utc_now_iso,
 )
+
+
+MAP_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
+
+# Goal-directed SLAM exploration.
+#
+# A mission destination may be outside the CURRENT map. Instead of asking
+# Nav2 to plan directly to an impossible goal, drive to a safe intermediate
+# point near the current frontier, let SLAM extend /map, then continue toward
+# the ORIGINAL mission waypoint.
+EXPLORATION_EDGE_MARGIN = 1.25
+EXPLORATION_MIN_STAGE = 0.75
+EXPLORATION_MIN_PROGRESS = 0.40
+EXPLORATION_MAP_WAIT = 4.0
+EXPLORATION_SETTLE = 0.75
+EXPLORATION_MAX_STAGES = 40
 
 
 def quat_from_yaw(yaw):
@@ -212,10 +244,463 @@ class DeliveryMission(Node):
             '/navigate_to_pose'
         )
 
+        # --------------------------------------------------
+        # Live navigation context for staged SLAM exploration.
+        #
+        # /map = growing SLAM world representation.
+        # /global_costmap/costmap = area Nav2 can currently plan in.
+        # --------------------------------------------------
+
+        self.base_frame = 'base_footprint'
+
+        self.slam_bounds = None
+        self.costmap_bounds = None
+        self.slam_grid = None
+        self.slam_info = None
+
+        self.create_subscription(
+            OccupancyGrid,
+            '/map',
+            self._on_slam_map,
+            MAP_QOS
+        )
+
+        self.create_subscription(
+            OccupancyGrid,
+            '/global_costmap/costmap',
+            self._on_global_costmap,
+            MAP_QOS
+        )
+
+        self.tf_buffer = tf2_ros.Buffer()
+
+        self.tf_listener = tf2_ros.TransformListener(
+            self.tf_buffer,
+            self
+        )
+
         self.active_goal_handle = None
 
         self.last_feedback_print = 0.0
         self.current_recoveries = 0
+
+    # ======================================================
+    # Live SLAM / Nav2 navigation context
+    # ======================================================
+
+    @staticmethod
+    def _bounds_from_grid(msg):
+
+        info = msg.info
+
+        min_x = info.origin.position.x
+        min_y = info.origin.position.y
+
+        max_x = (
+            min_x
+            + info.width * info.resolution
+        )
+
+        max_y = (
+            min_y
+            + info.height * info.resolution
+        )
+
+        return (
+            min_x,
+            min_y,
+            max_x,
+            max_y,
+        )
+
+    def _on_slam_map(self, msg):
+
+        self.slam_bounds = (
+            self._bounds_from_grid(msg)
+        )
+
+        self.slam_grid = list(
+            msg.data
+        )
+
+        self.slam_info = msg.info
+
+    def _on_global_costmap(self, msg):
+
+        self.costmap_bounds = (
+            self._bounds_from_grid(msg)
+        )
+
+    def _navigation_bounds(self):
+        """Area currently represented by BOTH SLAM and Nav2.
+
+        A mission staging waypoint must lie inside this intersection.
+        """
+
+        slam = self.slam_bounds
+        costmap = self.costmap_bounds
+
+        if slam is None:
+            return costmap
+
+        if costmap is None:
+            return slam
+
+        bounds = (
+            max(
+                slam[0],
+                costmap[0]
+            ),
+            max(
+                slam[1],
+                costmap[1]
+            ),
+            min(
+                slam[2],
+                costmap[2]
+            ),
+            min(
+                slam[3],
+                costmap[3]
+            ),
+        )
+
+        if (
+            bounds[0] >= bounds[2]
+            or bounds[1] >= bounds[3]
+        ):
+            return None
+
+        return bounds
+
+    @staticmethod
+    def _point_in_bounds(
+        x,
+        y,
+        bounds
+    ):
+
+        if bounds is None:
+            return False
+
+        return (
+            bounds[0] <= float(x) <= bounds[2]
+            and bounds[1] <= float(y) <= bounds[3]
+        )
+
+    def _current_pose(self):
+        """Current map-frame x, y, yaw from TF."""
+
+        try:
+
+            tf = self.tf_buffer.lookup_transform(
+                self.frame,
+                self.base_frame,
+                rclpy.time.Time(),
+                timeout=Duration(
+                    seconds=0.25
+                )
+            )
+
+        except TransformException:
+
+            return None
+
+        t = tf.transform.translation
+        q = tf.transform.rotation
+
+        yaw = math.atan2(
+            2.0 * (
+                q.w * q.z
+                + q.x * q.y
+            ),
+            1.0 - 2.0 * (
+                q.y * q.y
+                + q.z * q.z
+            )
+        )
+
+        return (
+            t.x,
+            t.y,
+            yaw,
+        )
+
+    def _goal_cell_blocked(
+        self,
+        x,
+        y
+    ):
+        """Known occupied SLAM cell?
+
+        Unknown cells are intentionally allowed: that is exactly the space
+        the active SLAM exploration is trying to reveal.
+        """
+
+        grid = self.slam_grid
+        info = self.slam_info
+
+        if (
+            grid is None
+            or info is None
+        ):
+            return False
+
+        res = info.resolution
+        ox = info.origin.position.x
+        oy = info.origin.position.y
+
+        cx = int(
+            (float(x) - ox)
+            / res
+        )
+
+        cy = int(
+            (float(y) - oy)
+            / res
+        )
+
+        if not (
+            0 <= cx < info.width
+            and 0 <= cy < info.height
+        ):
+            return False
+
+        value = grid[
+            cy * info.width
+            + cx
+        ]
+
+        # -1 means unknown and is intentionally permitted.
+        return value >= 65
+
+    def _frontier_stage_goal(
+        self,
+        start_x,
+        start_y,
+        final_x,
+        final_y,
+        bounds
+    ):
+        """Furthest safe intermediate point toward the final destination."""
+
+        dx = (
+            float(final_x)
+            - float(start_x)
+        )
+
+        dy = (
+            float(final_y)
+            - float(start_y)
+        )
+
+        full_distance = math.hypot(
+            dx,
+            dy
+        )
+
+        if full_distance < 1e-6:
+
+            return (
+                float(final_x),
+                float(final_y),
+                0.0,
+            )
+
+        ux = dx / full_distance
+        uy = dy / full_distance
+
+        min_x, min_y, max_x, max_y = bounds
+
+        distances = []
+        eps = 1e-9
+
+        if ux > eps:
+            distances.append(
+                (max_x - start_x)
+                / ux
+            )
+
+        elif ux < -eps:
+            distances.append(
+                (min_x - start_x)
+                / ux
+            )
+
+        if uy > eps:
+            distances.append(
+                (max_y - start_y)
+                / uy
+            )
+
+        elif uy < -eps:
+            distances.append(
+                (min_y - start_y)
+                / uy
+            )
+
+        positive = [
+            distance
+            for distance in distances
+            if distance >= 0.0
+        ]
+
+        if not positive:
+
+            return (
+                float(start_x),
+                float(start_y),
+                0.0,
+            )
+
+        distance_to_edge = min(
+            positive
+        )
+
+        if (
+            full_distance
+            <= distance_to_edge
+        ):
+
+            return (
+                float(final_x),
+                float(final_y),
+                full_distance,
+            )
+
+        stage_distance = max(
+            0.0,
+            distance_to_edge
+            - EXPLORATION_EDGE_MARGIN
+        )
+
+        # Pull the candidate backward if the frontier point happens to
+        # coincide with a known occupied cell.
+        while (
+            stage_distance
+            >= EXPLORATION_MIN_STAGE
+        ):
+
+            stage_x = (
+                start_x
+                + ux * stage_distance
+            )
+
+            stage_y = (
+                start_y
+                + uy * stage_distance
+            )
+
+            if not self._goal_cell_blocked(
+                stage_x,
+                stage_y
+            ):
+
+                return (
+                    stage_x,
+                    stage_y,
+                    stage_distance,
+                )
+
+            stage_distance -= 0.25
+
+        return (
+            float(start_x),
+            float(start_y),
+            0.0,
+        )
+
+    def _wait_for_navigation_context(
+        self,
+        timeout=4.0
+    ):
+
+        deadline = (
+            time.monotonic()
+            + float(timeout)
+        )
+
+        while (
+            rclpy.ok()
+            and time.monotonic()
+            < deadline
+        ):
+
+            rclpy.spin_once(
+                self,
+                timeout_sec=0.10
+            )
+
+            if (
+                self._current_pose()
+                is not None
+                and self._navigation_bounds()
+                is not None
+            ):
+                return True
+
+        return False
+
+    def _wait_for_more_exploration_room(
+        self,
+        final_x,
+        final_y
+    ):
+
+        deadline = (
+            time.monotonic()
+            + EXPLORATION_MAP_WAIT
+        )
+
+        while (
+            rclpy.ok()
+            and time.monotonic()
+            < deadline
+        ):
+
+            rclpy.spin_once(
+                self,
+                timeout_sec=0.10
+            )
+
+            bounds = (
+                self._navigation_bounds()
+            )
+
+            pose = (
+                self._current_pose()
+            )
+
+            if (
+                bounds is None
+                or pose is None
+            ):
+                continue
+
+            if self._point_in_bounds(
+                final_x,
+                final_y,
+                bounds
+            ):
+                return True
+
+            _, _, stage_distance = (
+                self._frontier_stage_goal(
+                    pose[0],
+                    pose[1],
+                    final_x,
+                    final_y,
+                    bounds
+                )
+            )
+
+            if (
+                stage_distance
+                >= EXPLORATION_MIN_STAGE
+            ):
+                return True
+
+        return False
 
     # ======================================================
     # Mission state
@@ -464,6 +949,287 @@ class DeliveryMission(Node):
         return False
 
     # ======================================================
+    # Goal-directed SLAM exploration for one mission leg
+    # ======================================================
+
+    def navigate_with_exploration(
+        self,
+        destination_name,
+        waypoint
+    ):
+        """Navigate one mission leg, extending SLAM toward it if necessary.
+
+        The destination never changes. Intermediate goals are only temporary
+        staging points selected along the direction of the original waypoint.
+        """
+
+        final_x, final_y, final_yaw = waypoint
+
+        if not self._wait_for_navigation_context(
+            timeout=4.0
+        ):
+
+            print(
+                'EXPLORATION CONTEXT unavailable; '
+                'falling back to direct Nav2 goal.'
+            )
+
+            return self.navigate(
+                destination_name,
+                waypoint
+            )
+
+        initial_pose = (
+            self._current_pose()
+        )
+
+        if initial_pose is None:
+
+            print(
+                'FAIL: no map-frame pose available '
+                'for exploration'
+            )
+
+            return False
+
+        print(
+            '[explore] %s final goal=(%.3f, %.3f), '
+            'distance=%.2fm'
+            % (
+                destination_name,
+                final_x,
+                final_y,
+                math.hypot(
+                    final_x - initial_pose[0],
+                    final_y - initial_pose[1],
+                ),
+            )
+        )
+
+        completed_stages = 0
+
+        for stage_number in range(
+            1,
+            EXPLORATION_MAX_STAGES + 1
+        ):
+
+            pose = self._current_pose()
+            bounds = self._navigation_bounds()
+
+            if (
+                pose is None
+                or bounds is None
+            ):
+
+                print(
+                    'FAIL: exploration lost pose '
+                    'or map bounds'
+                )
+
+                return False
+
+            remaining_before = math.hypot(
+                final_x - pose[0],
+                final_y - pose[1],
+            )
+
+            # The real destination has entered the current map.
+            if self._point_in_bounds(
+                final_x,
+                final_y,
+                bounds
+            ):
+
+                print(
+                    '[explore] %s final goal is now '
+                    'inside the live map after %d stage(s).'
+                    % (
+                        destination_name,
+                        completed_stages,
+                    )
+                )
+
+                return self.navigate(
+                    destination_name,
+                    waypoint
+                )
+
+            (
+                stage_x,
+                stage_y,
+                stage_distance,
+            ) = self._frontier_stage_goal(
+                pose[0],
+                pose[1],
+                final_x,
+                final_y,
+                bounds
+            )
+
+            if (
+                stage_distance
+                < EXPLORATION_MIN_STAGE
+            ):
+
+                print(
+                    '[explore] %s reached the current '
+                    'frontier; waiting for SLAM expansion...'
+                    % destination_name
+                )
+
+                if self._wait_for_more_exploration_room(
+                    final_x,
+                    final_y
+                ):
+                    continue
+
+                print(
+                    'FAIL: %s exploration stopped safely: '
+                    'SLAM did not expose more usable map '
+                    'within %.1fs.'
+                    % (
+                        destination_name,
+                        EXPLORATION_MAP_WAIT,
+                    )
+                )
+
+                return False
+
+            stage_yaw = math.atan2(
+                final_y - stage_y,
+                final_x - stage_x
+            )
+
+            stage_name = (
+                '%s_EXPLORE_%d'
+                % (
+                    destination_name,
+                    stage_number,
+                )
+            )
+
+            print(
+                '[explore] stage %d for %s: '
+                'current=(%.2f, %.2f) '
+                'stage=(%.2f, %.2f) '
+                'stage_distance=%.2fm '
+                'final_remaining=%.2fm'
+                % (
+                    stage_number,
+                    destination_name,
+                    pose[0],
+                    pose[1],
+                    stage_x,
+                    stage_y,
+                    stage_distance,
+                    remaining_before,
+                )
+            )
+
+            if not self.navigate(
+                stage_name,
+                (
+                    stage_x,
+                    stage_y,
+                    stage_yaw,
+                )
+            ):
+
+                print(
+                    'FAIL: exploration stage %d '
+                    'toward %s failed'
+                    % (
+                        stage_number,
+                        destination_name,
+                    )
+                )
+
+                return False
+
+            completed_stages += 1
+
+            after = self._current_pose()
+
+            if after is None:
+
+                print(
+                    'FAIL: pose unavailable after '
+                    'exploration stage %d'
+                    % stage_number
+                )
+
+                return False
+
+            remaining_after = math.hypot(
+                final_x - after[0],
+                final_y - after[1],
+            )
+
+            progress = (
+                remaining_before
+                - remaining_after
+            )
+
+            print(
+                '[explore] stage %d complete: '
+                'reached=(%.2f, %.2f), '
+                'progress=%.2fm, '
+                'remaining=%.2fm'
+                % (
+                    stage_number,
+                    after[0],
+                    after[1],
+                    progress,
+                    remaining_after,
+                )
+            )
+
+            if (
+                progress
+                < EXPLORATION_MIN_PROGRESS
+            ):
+
+                print(
+                    'FAIL: exploration stage %d made '
+                    'only %.2fm progress toward %s; '
+                    'refusing to loop.'
+                    % (
+                        stage_number,
+                        progress,
+                        destination_name,
+                    )
+                )
+
+                return False
+
+            settle_deadline = (
+                time.monotonic()
+                + EXPLORATION_SETTLE
+            )
+
+            while (
+                rclpy.ok()
+                and time.monotonic()
+                < settle_deadline
+            ):
+
+                rclpy.spin_once(
+                    self,
+                    timeout_sec=0.10
+                )
+
+        print(
+            'FAIL: %s exploration exceeded safety '
+            'limit of %d stages'
+            % (
+                destination_name,
+                EXPLORATION_MAX_STAGES,
+            )
+        )
+
+        return False
+
+    # ======================================================
     # Navigate with controlled retry
     # ======================================================
 
@@ -488,7 +1254,7 @@ class DeliveryMission(Node):
                 )
             )
 
-            if self.navigate(
+            if self.navigate_with_exploration(
                 destination_name,
                 waypoint
             ):

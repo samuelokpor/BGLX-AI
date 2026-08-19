@@ -79,6 +79,19 @@ REVERSE_STRAIGHT_TOL = 0.30     # m: |left| below this counts as a pure straight
 REVERSE_SPEED = 0.4             # m/s: closed-loop straight-reverse speed
 REVERSE_STOP_DIST = 1.6         # m: rear clearance floor (matches drive())
 
+# Goal-directed SLAM exploration.
+#
+# A requested destination is allowed to lie beyond the CURRENT map.
+# We advance to a safe point near the current mapped frontier, let SLAM
+# extend /map from new LiDAR observations, then continue toward the ORIGINAL
+# goal. The original user goal never changes.
+EXPLORATION_EDGE_MARGIN = FOOTPRINT_FORWARD_REACH + 0.50
+EXPLORATION_MIN_STAGE = 0.75
+EXPLORATION_MIN_PROGRESS = 0.50
+EXPLORATION_MAP_WAIT = 4.0
+EXPLORATION_SETTLE = 0.75
+EXPLORATION_MAX_STAGES = 25
+
 
 def rpy_from_quat(q):
     """Full roll/pitch/yaw. Yaw alone cannot tell you the robot has fallen."""
@@ -302,6 +315,391 @@ class RobotTools(Node):
                 % (margin, FOOTPRINT_FORWARD_REACH))
         return True, ("Inside the mapped area, %.2fm from the nearest edge."
                       % margin)
+
+    def _slam_bounds(self):
+        """Current geometric bounds of the live SLAM /map OccupancyGrid."""
+        with self._lock:
+            info = self._static_info
+
+        if info is None:
+            return None
+
+        min_x = info.origin.position.x
+        min_y = info.origin.position.y
+        max_x = min_x + info.width * info.resolution
+        max_y = min_y + info.height * info.resolution
+
+        return (min_x, min_y, max_x, max_y)
+
+    def _exploration_bounds(self):
+        """Area that is both represented by SLAM and usable by Nav2 now.
+
+        /map is the growing world representation.
+        _bounds comes from /global_costmap/costmap and is the area the
+        current Nav2 planner can address.
+
+        Taking the intersection prevents us from inventing a staging goal
+        that either SLAM or Nav2 cannot currently represent.
+        """
+        slam = self._slam_bounds()
+
+        with self._lock:
+            nav = self._bounds
+
+        if slam is None:
+            return nav
+        if nav is None:
+            return slam
+
+        bounds = (
+            max(slam[0], nav[0]),
+            max(slam[1], nav[1]),
+            min(slam[2], nav[2]),
+            min(slam[3], nav[3]),
+        )
+
+        if bounds[0] >= bounds[2] or bounds[1] >= bounds[3]:
+            return None
+
+        return bounds
+
+    @staticmethod
+    def _point_in_bounds(x, y, bounds):
+        if bounds is None:
+            return False
+        return (
+            bounds[0] <= float(x) <= bounds[2]
+            and bounds[1] <= float(y) <= bounds[3]
+        )
+
+    def _frontier_stage_goal(self, start_x, start_y, goal_x, goal_y, bounds):
+        """Furthest safe point toward goal that fits in current bounds.
+
+        Returns:
+            (stage_x, stage_y, stage_distance)
+
+        The point is pulled back from the geometric boundary so the trike's
+        footprint remains inside mapped/plannable space while its LiDAR looks
+        beyond the frontier and gives SLAM new information.
+        """
+        dx = float(goal_x) - float(start_x)
+        dy = float(goal_y) - float(start_y)
+        distance = math.hypot(dx, dy)
+
+        if distance < 1e-6:
+            return float(goal_x), float(goal_y), 0.0
+
+        ux = dx / distance
+        uy = dy / distance
+
+        min_x, min_y, max_x, max_y = bounds
+        edge_distances = []
+
+        eps = 1e-9
+
+        if ux > eps:
+            edge_distances.append((max_x - start_x) / ux)
+        elif ux < -eps:
+            edge_distances.append((min_x - start_x) / ux)
+
+        if uy > eps:
+            edge_distances.append((max_y - start_y) / uy)
+        elif uy < -eps:
+            edge_distances.append((min_y - start_y) / uy)
+
+        positive = [d for d in edge_distances if d >= 0.0]
+
+        if not positive:
+            return float(start_x), float(start_y), 0.0
+
+        distance_to_edge = min(positive)
+
+        # If the final goal itself fits before the frontier, use it.
+        if distance <= distance_to_edge:
+            return float(goal_x), float(goal_y), distance
+
+        stage_distance = max(
+            0.0,
+            distance_to_edge - EXPLORATION_EDGE_MARGIN
+        )
+
+        stage_x = start_x + ux * stage_distance
+        stage_y = start_y + uy * stage_distance
+
+        return stage_x, stage_y, stage_distance
+
+    def _wait_for_exploration_room(self, goal_x, goal_y):
+        """Give SLAM/Nav2 a short chance to publish expanded map bounds."""
+        deadline = time.time() + EXPLORATION_MAP_WAIT
+
+        while time.time() < deadline:
+            bounds = self._exploration_bounds()
+            pose = self._pose()
+
+            if bounds is not None and pose is not None:
+                if self._point_in_bounds(goal_x, goal_y, bounds):
+                    return True
+
+                sx, sy, _ = self._frontier_stage_goal(
+                    pose[0], pose[1],
+                    goal_x, goal_y,
+                    bounds
+                )
+
+                if math.hypot(sx - pose[0], sy - pose[1]) >= EXPLORATION_MIN_STAGE:
+                    return True
+
+            time.sleep(0.20)
+
+        return False
+
+    def _navigate_with_exploration(self, goal_x, goal_y, goal_yaw=None):
+        """Reach a goal beyond the current SLAM map in autonomous stages.
+
+        This is NOT random exploration. Every stage lies on the direction
+        toward the user's original requested destination.
+
+        Nav2 still owns path planning and obstacle avoidance for every stage.
+        SLAM is given new sensor viewpoints between stages and /map is then
+        re-evaluated before continuing.
+        """
+        goal_x = float(goal_x)
+        goal_y = float(goal_y)
+
+        start = self._pose()
+        if start is None:
+            msg = "Exploration failed: robot pose unavailable."
+            self._last_failure = msg
+            return msg
+
+        if start[3] != GLOBAL_FRAME:
+            msg = (
+                "Exploration refused: pose is in '%s', not 'map'. "
+                "SLAM has not converged." % start[3]
+            )
+            self._last_failure = msg
+            return msg
+
+        original_distance = math.hypot(
+            goal_x - start[0],
+            goal_y - start[1]
+        )
+
+        print(
+            "[explore] final goal=(%.2f, %.2f), initially %.2fm away"
+            % (goal_x, goal_y, original_distance),
+            flush=True
+        )
+
+        completed_stages = 0
+
+        for stage_number in range(1, EXPLORATION_MAX_STAGES + 1):
+
+            pose = self._pose()
+            if pose is None:
+                msg = (
+                    "Exploration aborted after %d stage(s): robot pose lost."
+                    % completed_stages
+                )
+                self._last_failure = msg
+                return msg
+
+            remaining_before = math.hypot(
+                goal_x - pose[0],
+                goal_y - pose[1]
+            )
+
+            # Normal Nav2 navigation becomes possible as soon as the original
+            # final destination enters the current SLAM/planning area.
+            bounds = self._exploration_bounds()
+
+            if bounds is None:
+                msg = (
+                    "Exploration cannot continue: no overlapping live SLAM "
+                    "map and Nav2 planning bounds are available."
+                )
+                self._last_failure = msg
+                return msg
+
+            if self._point_in_bounds(goal_x, goal_y, bounds):
+                print(
+                    "[explore] final goal is now inside the live map; "
+                    "starting final Nav2 approach",
+                    flush=True
+                )
+
+                result = self.navigate_to(
+                    goal_x,
+                    goal_y,
+                    goal_yaw,
+                    _allow_exploration=False
+                )
+
+                if str(result).startswith("Arrived at ("):
+                    return (
+                        "Exploration navigation complete. "
+                        "The destination was initially beyond the current map; "
+                        "%d exploration stage(s) exposed enough new space. %s"
+                        % (completed_stages, result)
+                    )
+
+                msg = (
+                    "Exploration reached mapped space for the final goal, "
+                    "but the final Nav2 approach failed. " + str(result)
+                )
+                self._last_failure = msg
+                return msg
+
+            stage_x, stage_y, stage_distance = self._frontier_stage_goal(
+                pose[0],
+                pose[1],
+                goal_x,
+                goal_y,
+                bounds
+            )
+
+            if stage_distance < EXPLORATION_MIN_STAGE:
+                print(
+                    "[explore] frontier is too close; waiting for SLAM "
+                    "to publish more map...",
+                    flush=True
+                )
+
+                if self._wait_for_exploration_room(goal_x, goal_y):
+                    continue
+
+                now_bounds = self._exploration_bounds()
+                msg = (
+                    "Exploration stopped safely after %d stage(s): the robot "
+                    "reached the current map frontier but SLAM did not expose "
+                    "enough additional plannable space within %.1fs. "
+                    "Final goal remains (%.2f, %.2f). Current bounds: %s"
+                    % (
+                        completed_stages,
+                        EXPLORATION_MAP_WAIT,
+                        goal_x,
+                        goal_y,
+                        now_bounds,
+                    )
+                )
+                self._last_failure = msg
+                return msg
+
+            print(
+                "[explore] stage %d: current=(%.2f, %.2f) "
+                "frontier_goal=(%.2f, %.2f), %.2fm this stage, "
+                "%.2fm remaining to final goal"
+                % (
+                    stage_number,
+                    pose[0], pose[1],
+                    stage_x, stage_y,
+                    stage_distance,
+                    remaining_before,
+                ),
+                flush=True
+            )
+
+            # Re-check the low front LiDAR between autonomous stages when the
+            # requested exploration direction is broadly in front of the trike.
+            bearing = math.atan2(
+                stage_y - pose[1],
+                stage_x - pose[0]
+            )
+            relative_bearing = (
+                bearing - pose[2] + math.pi
+            ) % (2.0 * math.pi) - math.pi
+
+            if abs(math.degrees(relative_bearing)) <= 60.0:
+                low = self.check_low_obstacles()
+                if "BLOCKED" in low:
+                    msg = (
+                        "Exploration stopped safely before stage %d because "
+                        "the low front LiDAR reports a blocked forward area. %s"
+                        % (stage_number, low)
+                    )
+                    self._last_failure = msg
+                    return msg
+
+            # Important: intermediate stages deliberately have NO final-yaw
+            # requirement. Requiring the user's ultimate destination heading
+            # at every frontier would force unnecessary Ackermann loops.
+            result = self.navigate_to(
+                stage_x,
+                stage_y,
+                None,
+                _allow_exploration=False
+            )
+
+            if not str(result).startswith("Arrived at ("):
+                msg = (
+                    "Exploration stopped during stage %d while still pursuing "
+                    "the original final goal (%.2f, %.2f). %s"
+                    % (
+                        stage_number,
+                        goal_x,
+                        goal_y,
+                        result,
+                    )
+                )
+                self._last_failure = msg
+                return msg
+
+            completed_stages += 1
+
+            after = self._pose()
+            if after is None:
+                msg = (
+                    "Exploration stage %d completed but pose became unavailable."
+                    % stage_number
+                )
+                self._last_failure = msg
+                return msg
+
+            remaining_after = math.hypot(
+                goal_x - after[0],
+                goal_y - after[1]
+            )
+            progress = remaining_before - remaining_after
+
+            print(
+                "[explore] stage %d reached=(%.2f, %.2f); "
+                "progress=%.2fm; final remaining=%.2fm"
+                % (
+                    stage_number,
+                    after[0],
+                    after[1],
+                    progress,
+                    remaining_after,
+                ),
+                flush=True
+            )
+
+            if progress < EXPLORATION_MIN_PROGRESS:
+                msg = (
+                    "Exploration stopped safely: stage %d produced only %.2fm "
+                    "of progress toward the original goal. Refusing to loop "
+                    "without meaningful forward progress."
+                    % (stage_number, progress)
+                )
+                self._last_failure = msg
+                return msg
+
+            # Usually SLAM expands while Nav2 is already moving. This small
+            # settle period lets the latest /map and costmap callbacks arrive
+            # before the next frontier calculation.
+            time.sleep(EXPLORATION_SETTLE)
+
+        msg = (
+            "Exploration stopped after the safety limit of %d stages. "
+            "Original goal (%.2f, %.2f) was not reached."
+            % (
+                EXPLORATION_MAX_STAGES,
+                goal_x,
+                goal_y,
+            )
+        )
+        self._last_failure = msg
+        return msg
 
     # --- landmarks ---------------------------------------------------------
     def _load_landmarks(self):
@@ -560,8 +958,12 @@ class RobotTools(Node):
                     "than through it." % (x, y, note))
         return None
 
-    def navigate_to(self, x, y, yaw=None):
-        """Send a Nav2 goal, then report in words what happened."""
+    def navigate_to(self, x, y, yaw=None, _allow_exploration=True):
+        """Navigate to the requested FINAL goal.
+
+        If the final goal is beyond the current live SLAM/planning area,
+        automatically advance toward it in safe stages while /map grows.
+        """
         upright, att = self.check_attitude()
         if upright is False:
             self._last_failure = att
@@ -572,19 +974,35 @@ class RobotTools(Node):
             self._last_failure = bounds_note
             return "navigate_to refused. " + bounds_note
 
-        with self._lock:
-            bounds = self._bounds
-        if bounds:
+        # Final goals are allowed to lie beyond the CURRENT SLAM map.
+        # Use the intersection of live /map and Nav2's current costmap so an
+        # intermediate stage is guaranteed to be representable by both.
+        bounds = self._exploration_bounds()
+
+        if (
+            bounds is not None
+            and not self._point_in_bounds(float(x), float(y), bounds)
+        ):
+            if _allow_exploration:
+                return self._navigate_with_exploration(
+                    float(x),
+                    float(y),
+                    yaw
+                )
+
             bx0, by0, bx1, by1 = bounds
-            if not (bx0 <= float(x) <= bx1 and by0 <= float(y) <= by1):
-                msg = ("navigate_to refused: goal (%.2f, %.2f) lies OUTSIDE "
-                       "the mapped area, which spans (%.2f, %.2f) to "
-                       "(%.2f, %.2f). No path can be planned to a goal the "
-                       "costmap does not cover. Pick a goal inside the map, "
-                       "or explore toward it in stages."
-                       % (float(x), float(y), bx0, by0, bx1, by1))
-                self._last_failure = msg
-                return msg
+            msg = (
+                "navigate_to refused for this INTERNAL stage: goal "
+                "(%.2f, %.2f) lies outside the current SLAM/Nav2 area, "
+                "which spans (%.2f, %.2f) to (%.2f, %.2f)."
+                % (
+                    float(x),
+                    float(y),
+                    bx0, by0, bx1, by1,
+                )
+            )
+            self._last_failure = msg
+            return msg
 
         # Is the goal cell somewhere the vehicle could actually stand?
         #
