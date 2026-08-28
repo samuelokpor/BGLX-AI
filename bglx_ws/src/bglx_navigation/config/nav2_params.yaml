@@ -32,9 +32,9 @@ controller_server:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
       desired_linear_vel: 1.2
       lookahead_dist: 1.2
-      min_lookahead_dist: 0.9    # must exceed the 0.77m turning radius: pure pursuit demands curvature 2sin(a)/L, so a short lookahead asks for turns the steering cannot deliver, the limiter clamps, and the controller saturates
-      max_lookahead_dist: 2.5
-      lookahead_time: 1.5
+      min_lookahead_dist: 1.2    # must exceed the 0.77m turning radius: pure pursuit demands curvature 2sin(a)/L, so a short lookahead asks for turns the steering cannot deliver, the limiter clamps, and the controller saturates
+      max_lookahead_dist: 3.0
+      lookahead_time: 2.0
       use_velocity_scaled_lookahead_dist: true
       transform_tolerance: 0.2
       use_collision_detection: true

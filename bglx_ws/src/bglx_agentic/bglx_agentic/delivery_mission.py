@@ -16,7 +16,7 @@ from rclpy.qos import (
 
 from action_msgs.msg import GoalStatus
 from nav_msgs.msg import OccupancyGrid
-from nav2_msgs.action import NavigateToPose
+from nav2_msgs.action import BackUp, NavigateToPose
 from std_msgs.msg import String
 
 import tf2_ros
@@ -99,6 +99,73 @@ class DeliveryMission(Node):
         )
 
         # --------------------------------------------------
+        # Early tricycle unstuck / turnaround assistance.
+        #
+        # These operate ABOVE Nav2. The proven Nav2/BT
+        # configuration remains unchanged.
+        # --------------------------------------------------
+
+        self.declare_parameter(
+            'turnaround_assist_enabled',
+            True
+        )
+
+        self.declare_parameter(
+            'turnaround_angle_deg',
+            150.0
+        )
+
+        self.declare_parameter(
+            'turnaround_min_goal_distance',
+            2.0
+        )
+
+        self.declare_parameter(
+            'early_unstuck_enabled',
+            True
+        )
+
+        self.declare_parameter(
+            'early_unstuck_window',
+            4.0
+        )
+
+        self.declare_parameter(
+            'early_unstuck_min_movement',
+            0.15
+        )
+
+        self.declare_parameter(
+            'early_unstuck_min_goal_distance',
+            1.0
+        )
+
+        self.declare_parameter(
+            'early_unstuck_max_per_goal',
+            3
+        )
+
+        self.declare_parameter(
+            'unstuck_backup_distance',
+            0.90
+        )
+
+        self.declare_parameter(
+            'unstuck_backup_speed',
+            0.30
+        )
+
+        self.declare_parameter(
+            'unstuck_backup_timeout',
+            10.0
+        )
+
+        self.declare_parameter(
+            'unstuck_cooldown',
+            1.0
+        )
+
+        # --------------------------------------------------
         # Named mission locations.
         #
         # XY positions live in mission_waypoints.py.
@@ -155,6 +222,95 @@ class DeliveryMission(Node):
             0.0,
             float(
                 gp('retry_delay').value
+            )
+        )
+
+        self.turnaround_assist_enabled = bool(
+            gp('turnaround_assist_enabled').value
+        )
+
+        self.turnaround_angle_deg = max(
+            0.0,
+            min(
+                180.0,
+                float(
+                    gp('turnaround_angle_deg').value
+                )
+            )
+        )
+
+        self.turnaround_min_goal_distance = max(
+            0.0,
+            float(
+                gp(
+                    'turnaround_min_goal_distance'
+                ).value
+            )
+        )
+
+        self.early_unstuck_enabled = bool(
+            gp('early_unstuck_enabled').value
+        )
+
+        self.early_unstuck_window = max(
+            1.0,
+            float(
+                gp('early_unstuck_window').value
+            )
+        )
+
+        self.early_unstuck_min_movement = max(
+            0.01,
+            float(
+                gp(
+                    'early_unstuck_min_movement'
+                ).value
+            )
+        )
+
+        self.early_unstuck_min_goal_distance = max(
+            0.0,
+            float(
+                gp(
+                    'early_unstuck_min_goal_distance'
+                ).value
+            )
+        )
+
+        self.early_unstuck_max_per_goal = max(
+            0,
+            int(
+                gp(
+                    'early_unstuck_max_per_goal'
+                ).value
+            )
+        )
+
+        self.unstuck_backup_distance = max(
+            0.05,
+            float(
+                gp('unstuck_backup_distance').value
+            )
+        )
+
+        self.unstuck_backup_speed = max(
+            0.05,
+            float(
+                gp('unstuck_backup_speed').value
+            )
+        )
+
+        self.unstuck_backup_timeout = max(
+            1.0,
+            float(
+                gp('unstuck_backup_timeout').value
+            )
+        )
+
+        self.unstuck_cooldown = max(
+            0.0,
+            float(
+                gp('unstuck_cooldown').value
             )
         )
 
@@ -242,6 +398,12 @@ class DeliveryMission(Node):
             self,
             NavigateToPose,
             '/navigate_to_pose'
+        )
+
+        self.backup_client = ActionClient(
+            self,
+            BackUp,
+            '/backup'
         )
 
         # --------------------------------------------------
@@ -424,6 +586,267 @@ class DeliveryMission(Node):
             t.x,
             t.y,
             yaw,
+        )
+
+    @staticmethod
+    def _normalize_angle(angle):
+        """Normalize angle to [-pi, +pi]."""
+
+        return math.atan2(
+            math.sin(angle),
+            math.cos(angle)
+        )
+
+    def _safe_backup(
+        self,
+        reason
+    ):
+        """Run Nav2 BackUp only when no NavigateToPose is active."""
+
+        if self.active_goal_handle is not None:
+
+            print(
+                '[unstuck] REFUSED backup: '
+                'NavigateToPose is still active.'
+            )
+
+            return False
+
+        if not self.backup_client.wait_for_server(
+            timeout_sec=1.0
+        ):
+
+            print(
+                '[unstuck] /backup action server '
+                'is unavailable; continuing with Nav2.'
+            )
+
+            return False
+
+        print()
+        print(
+            '[unstuck] BACKUP: %s'
+            % reason
+        )
+
+        print(
+            '[unstuck] requesting %.2fm reverse '
+            'at %.2fm/s'
+            % (
+                self.unstuck_backup_distance,
+                self.unstuck_backup_speed,
+            )
+        )
+
+        goal = BackUp.Goal()
+
+        # BackUp target is expressed behind the robot.
+        goal.target.x = (
+            -abs(
+                self.unstuck_backup_distance
+            )
+        )
+        goal.target.y = 0.0
+        goal.target.z = 0.0
+
+        goal.speed = abs(
+            self.unstuck_backup_speed
+        )
+
+        seconds = int(
+            self.unstuck_backup_timeout
+        )
+
+        nanoseconds = int(
+            (
+                self.unstuck_backup_timeout
+                - seconds
+            )
+            * 1_000_000_000
+        )
+
+        goal.time_allowance.sec = seconds
+        goal.time_allowance.nanosec = nanoseconds
+
+        send_future = (
+            self.backup_client.
+            send_goal_async(goal)
+        )
+
+        rclpy.spin_until_future_complete(
+            self,
+            send_future,
+            timeout_sec=3.0
+        )
+
+        if not send_future.done():
+
+            print(
+                '[unstuck] FAIL: /backup did not '
+                'answer within 3 seconds.'
+            )
+
+            return False
+
+        handle = send_future.result()
+
+        if (
+            handle is None
+            or not handle.accepted
+        ):
+
+            print(
+                '[unstuck] FAIL: backup goal rejected.'
+            )
+
+            return False
+
+        result_future = (
+            handle.get_result_async()
+        )
+
+        deadline = (
+            time.monotonic()
+            + self.unstuck_backup_timeout
+            + 2.0
+        )
+
+        while (
+            rclpy.ok()
+            and not result_future.done()
+            and time.monotonic() < deadline
+        ):
+
+            rclpy.spin_once(
+                self,
+                timeout_sec=0.10
+            )
+
+        if not result_future.done():
+
+            print(
+                '[unstuck] FAIL: backup timed out.'
+            )
+
+            try:
+
+                cancel_future = (
+                    handle.cancel_goal_async()
+                )
+
+                rclpy.spin_until_future_complete(
+                    self,
+                    cancel_future,
+                    timeout_sec=2.0
+                )
+
+            except Exception:
+                pass
+
+            return False
+
+        wrapped = result_future.result()
+
+        if (
+            wrapped is not None
+            and wrapped.status
+            == GoalStatus.STATUS_SUCCEEDED
+        ):
+
+            print(
+                '[unstuck] BACKUP SUCCEEDED.'
+            )
+
+            return True
+
+        status = (
+            wrapped.status
+            if wrapped is not None
+            else -1
+        )
+
+        print(
+            '[unstuck] backup finished '
+            'without success, status=%d.'
+            % status
+        )
+
+        return False
+
+    def _maybe_turnaround_assist(
+        self,
+        destination_name,
+        goal_x,
+        goal_y
+    ):
+        """Back up before a goal lying almost directly behind the trike."""
+
+        if not self.turnaround_assist_enabled:
+            return False
+
+        pose = self._current_pose()
+
+        if pose is None:
+
+            print(
+                '[unstuck] turnaround check skipped: '
+                'pose unavailable.'
+            )
+
+            return False
+
+        px, py, yaw = pose
+
+        dx = float(goal_x) - px
+        dy = float(goal_y) - py
+
+        distance = math.hypot(
+            dx,
+            dy
+        )
+
+        if (
+            distance
+            < self.turnaround_min_goal_distance
+        ):
+            return False
+
+        desired_yaw = math.atan2(
+            dy,
+            dx
+        )
+
+        error = abs(
+            self._normalize_angle(
+                desired_yaw - yaw
+            )
+        )
+
+        error_deg = math.degrees(
+            error
+        )
+
+        if (
+            error_deg
+            < self.turnaround_angle_deg
+        ):
+            return False
+
+        print()
+        print(
+            '[unstuck] TURNAROUND detected for %s: '
+            'goal bearing is %.1f deg from current '
+            'heading (threshold %.1f deg).'
+            % (
+                destination_name,
+                error_deg,
+                self.turnaround_angle_deg,
+            )
+        )
+
+        return self._safe_backup(
+            'proactive turnaround before %s'
+            % destination_name
         )
 
     def _goal_cell_blocked(
@@ -758,10 +1181,14 @@ class DeliveryMission(Node):
     # Cancel active navigation goal
     # ======================================================
 
-    def cancel_active_goal(self):
+    def cancel_active_goal(
+        self,
+        result_future=None
+    ):
+        """Cancel active NavigateToPose and wait for it to settle."""
 
         if self.active_goal_handle is None:
-            return
+            return True
 
         try:
 
@@ -776,10 +1203,44 @@ class DeliveryMission(Node):
                 timeout_sec=3.0
             )
 
-        except Exception:
-            pass
+        except Exception as exc:
 
-        self.active_goal_handle = None
+            print(
+                '[unstuck] navigation cancel error: %s'
+                % exc
+            )
+
+            return False
+
+        if (
+            result_future is not None
+            and not result_future.done()
+        ):
+
+            rclpy.spin_until_future_complete(
+                self,
+                result_future,
+                timeout_sec=4.0
+            )
+
+        settled = (
+            result_future is None
+            or result_future.done()
+        )
+
+        if settled:
+
+            self.active_goal_handle = None
+
+        else:
+
+            print(
+                '[unstuck] WARNING: navigation action '
+                'did not settle after cancellation. '
+                'Backup will NOT be commanded.'
+            )
+
+        return settled
 
     # ======================================================
     # Navigate one mission leg
@@ -800,7 +1261,6 @@ class DeliveryMission(Node):
         print(
             '--------------------------------------'
         )
-
         print(
             'NAVIGATING TO %s'
             % destination_name
@@ -819,85 +1279,35 @@ class DeliveryMission(Node):
             '--------------------------------------'
         )
 
-        goal = NavigateToPose.Goal()
+        # --------------------------------------------------
+        # Proactive tricycle turnaround.
+        #
+        # If the new goal lies almost directly behind the
+        # trike, create maneuvering room BEFORE asking the
+        # forward-curvature planner to solve the new leg.
+        # --------------------------------------------------
 
-        goal.pose.header.frame_id = (
-            self.frame
+        self._maybe_turnaround_assist(
+            destination_name,
+            x,
+            y
         )
 
-        # Use the same zero-stamp convention as robot_tools.py.
-        # This lets Nav2 transform the goal using the latest TF.
-        goal.pose.header.stamp = rclpy.time.Time().to_msg()
-
-        goal.pose.pose.position.x = x
-        goal.pose.pose.position.y = y
-
-        qz, qw = quat_from_yaw(yaw)
-
-        goal.pose.pose.orientation.z = qz
-        goal.pose.pose.orientation.w = qw
-
-        send_future = (
-            self.nav_client.
-            send_goal_async(
-                goal,
-                feedback_callback=
-                self.feedback_cb
-            )
+        navigation_deadline = (
+            time.monotonic()
+            + self.leg_timeout
         )
 
-        rclpy.spin_until_future_complete(
-            self,
-            send_future,
-            timeout_sec=5.0
-        )
+        early_unstuck_count = 0
+        assist_budget_logged = False
 
-        if not send_future.done():
-            print(
-                'FAIL: Nav2 did not answer goal request '
-                'within 5 seconds'
-            )
-            return False
-
-        handle = send_future.result()
-
-        if (
-            handle is None
-            or not handle.accepted
-        ):
-
-            print(
-                'FAIL: %s goal rejected'
-                % destination_name
-            )
-
-            return False
-
-        self.active_goal_handle = handle
-
-        print(
-            'Goal accepted by Nav2.'
-        )
-
-        result_future = (
-            handle.get_result_async()
-        )
-
-        start = time.monotonic()
-
-        while (
-            rclpy.ok()
-            and not result_future.done()
-        ):
-
-            rclpy.spin_once(
-                self,
-                timeout_sec=0.10
-            )
+        # This loop permits the exact SAME mission goal to be
+        # safely re-issued after an early BackUp maneuver.
+        while rclpy.ok():
 
             if (
-                time.monotonic() - start
-                > self.leg_timeout
+                time.monotonic()
+                > navigation_deadline
             ):
 
                 print(
@@ -905,48 +1315,308 @@ class DeliveryMission(Node):
                     % destination_name
                 )
 
-                self.cancel_active_goal()
+                return False
+
+            self.current_recoveries = 0
+            self.last_feedback_print = 0.0
+
+            goal = NavigateToPose.Goal()
+
+            goal.pose.header.frame_id = (
+                self.frame
+            )
+
+            # Use latest available TF.
+            goal.pose.header.stamp = (
+                rclpy.time.Time().to_msg()
+            )
+
+            goal.pose.pose.position.x = x
+            goal.pose.pose.position.y = y
+
+            qz, qw = quat_from_yaw(yaw)
+
+            goal.pose.pose.orientation.z = qz
+            goal.pose.pose.orientation.w = qw
+
+            send_future = (
+                self.nav_client.
+                send_goal_async(
+                    goal,
+                    feedback_callback=
+                    self.feedback_cb
+                )
+            )
+
+            rclpy.spin_until_future_complete(
+                self,
+                send_future,
+                timeout_sec=5.0
+            )
+
+            if not send_future.done():
+
+                print(
+                    'FAIL: Nav2 did not answer goal request '
+                    'within 5 seconds'
+                )
 
                 return False
 
-        wrapped = result_future.result()
+            handle = send_future.result()
 
-        self.active_goal_handle = None
+            if (
+                handle is None
+                or not handle.accepted
+            ):
 
-        if wrapped is None:
+                print(
+                    'FAIL: %s goal rejected'
+                    % destination_name
+                )
+
+                return False
+
+            self.active_goal_handle = handle
 
             print(
-                'FAIL: no result from %s'
-                % destination_name
+                'Goal accepted by Nav2.'
             )
+
+            result_future = (
+                handle.get_result_async()
+            )
+
+            anchor_pose = (
+                self._current_pose()
+            )
+
+            anchor_time = (
+                time.monotonic()
+            )
+
+            restart_same_goal = False
+
+            while (
+                rclpy.ok()
+                and not result_future.done()
+            ):
+
+                rclpy.spin_once(
+                    self,
+                    timeout_sec=0.10
+                )
+
+                now = time.monotonic()
+
+                # ------------------------------------------
+                # Normal mission-leg timeout.
+                # ------------------------------------------
+
+                if (
+                    now
+                    > navigation_deadline
+                ):
+
+                    print(
+                        'TIMEOUT: %s'
+                        % destination_name
+                    )
+
+                    self.cancel_active_goal(
+                        result_future
+                    )
+
+                    return False
+
+                # ------------------------------------------
+                # EARLY STUCK DETECTOR
+                #
+                # Nav2's existing progress checker / BT stays
+                # untouched. This intervenes sooner only if
+                # the physical trike has barely moved.
+                # ------------------------------------------
+
+                if (
+                    self.early_unstuck_enabled
+                    and early_unstuck_count
+                    < self.early_unstuck_max_per_goal
+                ):
+
+                    pose = (
+                        self._current_pose()
+                    )
+
+                    if pose is not None:
+
+                        if anchor_pose is None:
+
+                            anchor_pose = pose
+                            anchor_time = now
+
+                        moved = math.hypot(
+                            pose[0] - anchor_pose[0],
+                            pose[1] - anchor_pose[1],
+                        )
+
+                        remaining_direct = math.hypot(
+                            x - pose[0],
+                            y - pose[1],
+                        )
+
+                        # Any meaningful movement restarts
+                        # the stagnation timer.
+                        if (
+                            moved
+                            >= self.early_unstuck_min_movement
+                        ):
+
+                            anchor_pose = pose
+                            anchor_time = now
+
+                        elif (
+                            remaining_direct
+                            > self.early_unstuck_min_goal_distance
+                            and (
+                                now - anchor_time
+                                >= self.early_unstuck_window
+                            )
+                        ):
+
+                            early_unstuck_count += 1
+
+                            print()
+                            print(
+                                '[unstuck] EARLY STUCK on %s: '
+                                'moved %.2fm in %.1fs, '
+                                'goal is %.2fm away.'
+                                % (
+                                    destination_name,
+                                    moved,
+                                    now - anchor_time,
+                                    remaining_direct,
+                                )
+                            )
+
+                            print(
+                                '[unstuck] assist %d/%d: '
+                                'cancel Nav2 -> BackUp -> '
+                                'resend SAME goal'
+                                % (
+                                    early_unstuck_count,
+                                    self.early_unstuck_max_per_goal,
+                                )
+                            )
+
+                            settled = (
+                                self.cancel_active_goal(
+                                    result_future
+                                )
+                            )
+
+                            if not settled:
+
+                                print(
+                                    '[unstuck] navigation '
+                                    'cancellation did not '
+                                    'settle; refusing to '
+                                    'start BackUp.'
+                                )
+
+                                return False
+
+                            self._safe_backup(
+                                'early stuck while navigating '
+                                'to %s'
+                                % destination_name
+                            )
+
+                            # Small settling period while still
+                            # spinning ROS callbacks.
+                            settle_deadline = (
+                                time.monotonic()
+                                + self.unstuck_cooldown
+                            )
+
+                            while (
+                                rclpy.ok()
+                                and time.monotonic()
+                                < settle_deadline
+                            ):
+
+                                rclpy.spin_once(
+                                    self,
+                                    timeout_sec=0.10
+                                )
+
+                            print(
+                                '[unstuck] re-sending '
+                                'original %s goal.'
+                                % destination_name
+                            )
+
+                            restart_same_goal = True
+                            break
+
+                elif (
+                    self.early_unstuck_enabled
+                    and not assist_budget_logged
+                    and self.early_unstuck_max_per_goal > 0
+                ):
+
+                    print(
+                        '[unstuck] early-assist budget '
+                        'exhausted for %s; leaving any '
+                        'further recovery to the normal '
+                        'Nav2 BT.'
+                        % destination_name
+                    )
+
+                    assist_budget_logged = True
+
+            if restart_same_goal:
+                continue
+
+            wrapped = result_future.result()
+
+            self.active_goal_handle = None
+
+            if wrapped is None:
+
+                print(
+                    'FAIL: no result from %s'
+                    % destination_name
+                )
+
+                return False
+
+            status = wrapped.status
+
+            print(
+                '%s result: '
+                'status=%d recoveries=%d '
+                'early_assists=%d'
+                % (
+                    destination_name,
+                    status,
+                    self.current_recoveries,
+                    early_unstuck_count,
+                )
+            )
+
+            if (
+                status
+                == GoalStatus.STATUS_SUCCEEDED
+            ):
+
+                print(
+                    'ARRIVED: %s'
+                    % destination_name
+                )
+
+                return True
 
             return False
-
-        status = wrapped.status
-
-        print(
-            '%s result: '
-            'status=%d recoveries=%d'
-            % (
-                destination_name,
-                status,
-                self.current_recoveries,
-            )
-        )
-
-        if (
-            status
-            == GoalStatus.STATUS_SUCCEEDED
-        ):
-
-            print(
-                'ARRIVED: %s'
-                % destination_name
-            )
-
-            return True
-
-        return False
 
     # ======================================================
     # Goal-directed SLAM exploration for one mission leg
