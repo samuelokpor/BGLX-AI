@@ -51,6 +51,7 @@ class CmdVelLimiter(Node):
         self.declare_parameter('front_scan_topic', '/etrike/front_scan')
         self.declare_parameter('front_stop_distance', 1.0)
         self.declare_parameter('front_stop_half_angle_deg', 45.0)
+        self.declare_parameter('front_corridor_half_width', 0.50)
         self.declare_parameter('front_scan_timeout', 0.75)
         self.declare_parameter('fail_closed_on_front_scan_loss', True)
 
@@ -135,6 +136,9 @@ class CmdVelLimiter(Node):
         self.front_scan_topic = gp('front_scan_topic').value
         self.front_stop_distance = float(
             gp('front_stop_distance').value)
+
+        self.front_corridor_half_width = float(
+            gp('front_corridor_half_width').value)
 
         self.front_half_angle = math.radians(
             float(gp('front_stop_half_angle_deg').value))
@@ -271,27 +275,59 @@ class CmdVelLimiter(Node):
 
     def on_front_scan(self, msg: LaserScan):
         """
-        Find nearest valid low-LiDAR return inside the
-        forward collision-safety arc.
+        Find the nearest valid low-LiDAR return that actually
+        intersects the protected forward vehicle corridor.
+
+        The old implementation used the nearest return anywhere
+        inside +/-45 degrees. That can falsely stop the trike on
+        pillars or walls beside an otherwise-clear narrow passage.
+
+        Convert each return to Cartesian coordinates:
+
+            x = forward
+            y = lateral
+
+        and only give emergency-stop authority to obstacles within
+        the configured lateral corridor.
         """
-        nearest = None
+
+        nearest_forward = None
 
         for i, r in enumerate(msg.ranges):
+
             if not math.isfinite(r):
                 continue
 
             if r < msg.range_min or r > msg.range_max:
                 continue
 
-            angle = msg.angle_min + i * msg.angle_increment
+            angle = (
+                msg.angle_min
+                + i * msg.angle_increment
+            )
 
-            if abs(angle) > self.front_half_angle:
+            x = r * math.cos(angle)
+            y = r * math.sin(angle)
+
+            # Ignore anything not physically ahead.
+            if x <= 0.0:
                 continue
 
-            if nearest is None or r < nearest:
-                nearest = float(r)
+            # Ignore obstacles outside the protected
+            # vehicle-width corridor.
+            if (
+                abs(y)
+                > self.front_corridor_half_width
+            ):
+                continue
 
-        self._front_near = nearest
+            if (
+                nearest_forward is None
+                or x < nearest_forward
+            ):
+                nearest_forward = float(x)
+
+        self._front_near = nearest_forward
         self._front_scan_stamp = self.get_clock().now()
 
     def _front_guard_reason(self, v):
