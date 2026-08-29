@@ -17,7 +17,7 @@ terrain_detector:
     x_min: 1.30
     x_max: 5.50
     fit_half_width: 1.25
-    corridor_half_width: 0.70
+    corridor_half_width: 0.50
 
     # Ground plane is anchored to near-field road ahead.
     ground_fit_x_max: 2.10
