@@ -1452,6 +1452,30 @@ class TerrainDetector(Node):
 
                 self.last_tf_warning = now
 
+            # Terrain geometry cannot be transformed into the vehicle
+            # frame. Keep the emergency-safety heartbeat alive and
+            # fail closed until TF becomes available again.
+            hard_msg = Bool()
+            hard_msg.data = True
+            self.hard_stop_pub.publish(hard_msg)
+
+            distance_msg = Float32()
+            distance_msg.data = float('nan')
+            self.hazard_distance_pub.publish(distance_msg)
+
+            self.publish_status(
+                'TF_UNAVAILABLE',
+                True,
+                {
+                    'hard_stop': True,
+                    'hazard_distance_m': None,
+                    'hard_stop_distance_m':
+                        self.hard_stop_distance,
+                    'source_frame': source_frame,
+                    'base_frame': self.base_frame,
+                }
+            )
+
             return
 
         R = quat_to_matrix(
@@ -1474,7 +1498,32 @@ class TerrainDetector(Node):
 
         valid = np.isfinite(Z)
 
-        if np.count_nonzero(valid) < 500:
+        valid_count = int(np.count_nonzero(valid))
+
+        if valid_count < 500:
+
+            # Perception cannot establish safe terrain.
+            # Keep the hard-stop heartbeat alive and fail closed.
+            hard_msg = Bool()
+            hard_msg.data = True
+            self.hard_stop_pub.publish(hard_msg)
+
+            distance_msg = Float32()
+            distance_msg.data = float('nan')
+            self.hazard_distance_pub.publish(distance_msg)
+
+            self.publish_status(
+                'INSUFFICIENT_DEPTH_DATA',
+                True,
+                {
+                    'hard_stop': True,
+                    'hazard_distance_m': None,
+                    'hard_stop_distance_m':
+                        self.hard_stop_distance,
+                    'valid_depth_points': valid_count,
+                }
+            )
+
             return
 
         X = (
@@ -1514,6 +1563,30 @@ class TerrainDetector(Node):
         z = z[roi]
 
         if len(z) < 500:
+
+            # Depth exists, but too little usable terrain remains
+            # inside the transformed ROI. Keep safety state fresh
+            # and fail closed until terrain can be evaluated again.
+            hard_msg = Bool()
+            hard_msg.data = True
+            self.hard_stop_pub.publish(hard_msg)
+
+            distance_msg = Float32()
+            distance_msg.data = float('nan')
+            self.hazard_distance_pub.publish(distance_msg)
+
+            self.publish_status(
+                'INSUFFICIENT_TERRAIN_ROI',
+                True,
+                {
+                    'hard_stop': True,
+                    'hazard_distance_m': None,
+                    'hard_stop_distance_m':
+                        self.hard_stop_distance,
+                    'roi_points': int(len(z)),
+                }
+            )
+
             return
 
         # --------------------------------------------------------------
@@ -1534,10 +1607,27 @@ class TerrainDetector(Node):
 
         if fit is None:
 
+            # Ground fitting failed. Keep the emergency-safety topic
+            # alive instead of returning with an increasingly stale
+            # /etrike/terrain/hard_stop value.
+            #
+            # Fail closed here: perception cannot establish safe ground.
+            hard_msg = Bool()
+            hard_msg.data = True
+            self.hard_stop_pub.publish(hard_msg)
+
+            distance_msg = Float32()
+            distance_msg.data = float('nan')
+            self.hazard_distance_pub.publish(distance_msg)
+
             self.publish_status(
                 'GROUND_FIT_FAILED',
                 True,
                 {
+                    'hard_stop': True,
+                    'hazard_distance_m': None,
+                    'hard_stop_distance_m':
+                        self.hard_stop_distance,
                     'roi_points': int(len(z))
                 }
             )
