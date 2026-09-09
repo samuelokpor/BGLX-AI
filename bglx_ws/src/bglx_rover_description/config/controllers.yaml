@@ -1,4 +1,4 @@
-controller_manager:
+/rover/controller_manager:
   ros__parameters:
     update_rate: 50
     use_sim_time: true
@@ -7,7 +7,7 @@ controller_manager:
     diff_drive_controller:
       type: diff_drive_controller/DiffDriveController
 
-diff_drive_controller:
+/rover/diff_drive_controller:
   ros__parameters:
     use_sim_time: true
     left_wheel_names:  ["left_wheel_joint"]

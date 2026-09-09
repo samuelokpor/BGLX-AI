@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""BGLX Rover (Robot #002) Gazebo launch.
+"""BGLX Rover (Robot #002) Gazebo launch — namespaced under /rover.
 
-Mirrors etrike_description/launch/gazebo.launch.py:
-  - robot_description built eagerly with xacro.process_file() and stripped of
-    XML comments, because gazebo_ros2_control re-injects it as a --param
-    override that rcl parses as YAML (a ': ' in a comment breaks it).
-  - gzserver/gzclient come from gazebo_ros so libgazebo_ros_factory.so is
-    loaded and /spawn_entity actually exists.
-  - spawners sequenced after the entity is in the world.
+Mirrors etrike_description/launch/gazebo.launch.py, with two differences:
+  - everything lives under /rover so trike and rover can share a world
+  - spawn uses -file (URDF written to disk) instead of -topic, so the spawn
+    does not depend on topic latching/namespace timing
 """
 import os
 import re
+import tempfile
 import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -22,6 +20,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 _XML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
+NS = 'rover'
 
 
 def build_robot_description(xacro_path, controllers_file):
@@ -45,6 +44,11 @@ def generate_launch_description():
 
     robot_description = build_robot_description(urdf_file, controllers_file)
 
+    # Written to disk so spawn_entity can use -file (no topic dependency).
+    urdf_path = os.path.join(tempfile.gettempdir(), 'bglx_rover.urdf')
+    with open(urdf_path, 'w') as fh:
+        fh.write(robot_description)
+
     gzserver = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(gazebo_ros, 'launch', 'gzserver.launch.py')),
@@ -56,26 +60,25 @@ def generate_launch_description():
 
     rsp = Node(
         package='robot_state_publisher', executable='robot_state_publisher',
-        name='robot_state_publisher', output='screen',
+        name='robot_state_publisher', namespace=NS, output='screen',
         parameters=[{'robot_description': robot_description,
-                     'use_sim_time': use_sim_time}],
-        remappings=[('joint_states', '/joint_states')])
+                     'use_sim_time': use_sim_time}])
 
     spawn = Node(
         package='gazebo_ros', executable='spawn_entity.py',
         name='spawn_bglx_rover', output='screen',
-        arguments=['-topic', 'robot_description', '-entity', 'bglx_rover',
+        arguments=['-file', urdf_path, '-entity', 'bglx_rover',
                    '-x', '0.0', '-y', '0.0', '-z', '0.20'])
 
     jsb = Node(
         package='controller_manager', executable='spawner', output='screen',
         arguments=['joint_state_broadcaster',
-                   '--controller-manager', '/controller_manager'])
+                   '--controller-manager', '/rover/controller_manager'])
 
     diff = Node(
         package='controller_manager', executable='spawner', output='screen',
         arguments=['diff_drive_controller',
-                   '--controller-manager', '/controller_manager'])
+                   '--controller-manager', '/rover/controller_manager'])
 
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='true'),
