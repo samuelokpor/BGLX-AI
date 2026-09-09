@@ -3,8 +3,8 @@
 Nav2 will happily plan through a gap its inflation layer tolerates and then
 discover, mid-corridor, that the controller cannot follow the path. For a
 differential-drive robot that is an inconvenience: it pivots and leaves. For
-this tricycle it is a genuine failure. The vehicle is 1.55m long and 0.80m
-wide, it cannot rotate in place, it needs roughly 1.5m of clear space to swing
+this tricycle it is a genuine failure. The vehicle is 2.01m long and 1.04m
+wide, it cannot rotate in place, it needs roughly 4.1m of clear space to swing
 round, and its LiDAR sees nothing behind it that the local costmap trusts.
 Committing to a corridor it cannot fit is how the trike ends up stranded
 somewhere a human has to go and fetch it.
@@ -21,14 +21,14 @@ vehicle would have to pass through.
 
 import math
 
-VEHICLE_WIDTH = 0.80          # rear track plus tyre width
-VEHICLE_LENGTH = 1.55         # -0.30 to 1.25 from base_footprint
+VEHICLE_WIDTH = 1.04          # conservative concept footprint including sensors
+VEHICLE_LENGTH = 2.01         # -0.38 to 1.63 from base_footprint
 MIRROR_CLEARANCE = 0.15       # each side: handlebars, cargo rails, wobble
-TURN_AROUND_SPACE = 1.6       # roughly 2x minimum turning radius
+TURN_AROUND_SPACE = 4.1       # full swept footprint diameter at maximum steer
 
 # A gap must exceed this to be called comfortable rather than tight.
-COMFORTABLE = VEHICLE_WIDTH + 2 * MIRROR_CLEARANCE + 0.40    # 1.50m
-MINIMUM = VEHICLE_WIDTH + 2 * MIRROR_CLEARANCE               # 1.10m
+COMFORTABLE = VEHICLE_WIDTH + 2 * MIRROR_CLEARANCE + 0.40    # 1.74m
+MINIMUM = VEHICLE_WIDTH + 2 * MIRROR_CLEARANCE               # 1.34m
 
 
 def _rays(scan):

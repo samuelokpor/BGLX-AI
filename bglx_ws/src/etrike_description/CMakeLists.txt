@@ -19,3 +19,9 @@ install(DIRECTORY
 )
 
 ament_package()
+
+# BGLX Gazebo / OGRE visual materials
+install(
+  DIRECTORY materials
+  DESTINATION share/${PROJECT_NAME}
+)

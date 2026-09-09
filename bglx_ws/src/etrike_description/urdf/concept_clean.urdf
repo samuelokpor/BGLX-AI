@@ -1,0 +1,1137 @@
+<robot name="bglx_clean_layout_prototype">
+  <material name="concept_mount">
+    <color rgba="0.22 0.26 0.23 1" />
+  </material>
+  <link name="base_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.4568493151 0 0.452739726" />
+      <mass value="29.2" />
+      <inertia ixx="2.501097489" ixy="0" ixz="0.8218479452" iyy="4.096344292" iyz="0" izz="2.346680137" />
+    </inertial>
+    <collision name="lower_chassis">
+      <origin rpy="0 0 0" xyz="0.48 0 0.2225" />
+      <geometry>
+        <box size="1.04 0.38 0.095" />
+      </geometry>
+    </collision>
+    <collision name="battery">
+      <origin rpy="0 0 0" xyz="0.55 0 0.335" />
+      <geometry>
+        <box size="0.58 0.32 0.2" />
+      </geometry>
+    </collision>
+    <collision name="cargo_shell">
+      <origin rpy="0 0 0" xyz="0.18 0 0.882" />
+      <geometry>
+        <box size="0.7 0.61 0.58" />
+      </geometry>
+    </collision>
+    <collision name="cargo_support">
+      <origin rpy="0 0 0" xyz="0.13 0 0.44" />
+      <geometry>
+        <box size="0.36 0.47 0.32" />
+      </geometry>
+    </collision>
+    <collision name="display">
+      <origin rpy="0 -0.3 0" xyz="0.97 0 0.785" />
+      <geometry>
+        <box size="0.06 0.225 0.375" />
+      </geometry>
+    </collision>
+    <collision name="head_bearing_support">
+      <origin rpy="0 0 0" xyz="1.08 0 0.64" />
+      <geometry>
+        <box size="0.28 0.065 0.03" />
+      </geometry>
+    </collision>
+    <visual name="head_bearing_support">
+      <origin rpy="0 0 0" xyz="1.08 0 0.64" />
+      <geometry>
+        <box size="0.28 0.065 0.03" />
+      </geometry>
+      <material name="bglx_aluminum">
+        <color rgba="0.68 0.71 0.68 1.0" />
+      </material>
+    </visual>
+    <collision name="sensor_mast">
+      <origin rpy="0 0 0" xyz="0.42 0 1.243" />
+      <geometry>
+        <box size="0.23 0.34 0.142" />
+      </geometry>
+    </collision>
+    <collision name="terrain_camera_mount">
+      <origin rpy="0 0 0" xyz="1.005 0 0.855" />
+      <geometry>
+        <box size="0.095 0.07 0.025" />
+      </geometry>
+    </collision>
+    <visual name="terrain_camera_mount">
+      <origin rpy="0 0 0" xyz="1.005 0 0.855" />
+      <geometry>
+        <box size="0.095 0.07 0.025" />
+      </geometry>
+      <material name="bglx_aluminum">
+        <color rgba="0.68 0.71 0.68 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_0">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_0.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_0">
+        <color rgba="0.627451 0.666667 0.635294 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_1">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_1.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_1">
+        <color rgba="0.466667 0.494118 0.470588 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_2">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_2.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_2">
+        <color rgba="0.737255 0.772549 0.737255 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_3">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_3.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_3">
+        <color rgba="0.223529 0.262745 0.231373 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_4">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_4.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_4">
+        <color rgba="0.141176 0.160784 0.145098 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_5">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_5.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_5">
+        <color rgba="0.062745 0.090196 0.07451 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_6">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_6.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_6">
+        <color rgba="0.043137 0.094118 0.066667 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_7">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_7.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_7">
+        <color rgba="0.329412 0.72549 0.482353 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_8">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_8.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_8">
+        <color rgba="0.207843 0.227451 0.215686 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_9">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_9.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_9">
+        <color rgba="0.188235 0.207843 0.196078 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_body_10">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/body_10.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_body_10">
+        <color rgba="0.031373 0.14902 0.133333 1.0" />
+      </material>
+    </visual>
+  </link>
+  <link name="base_footprint" />
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="base_footprint" />
+    <origin rpy="0 0 0" xyz="0 0 0" />
+  </joint>
+  <link name="caster_mount">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.025 0 -0.19" />
+      <mass value="3" />
+      <inertia ixx="0.052" ixy="0" ixz="0" iyy="0.048" iyz="0" izz="0.015" />
+    </inertial>
+    <collision name="fork_-1">
+      <origin rpy="0 -0.15 0" xyz="-0.025 -0.076 -0.215" />
+      <geometry>
+        <box size="0.047 0.047 0.3" />
+      </geometry>
+    </collision>
+    <collision name="fork_1">
+      <origin rpy="0 -0.15 0" xyz="-0.025 0.076 -0.215" />
+      <geometry>
+        <box size="0.047 0.047 0.3" />
+      </geometry>
+    </collision>
+    <collision name="fork_crown">
+      <origin rpy="0 0 0" xyz="-0.07 0 -0.075" />
+      <geometry>
+        <box size="0.09 0.2 0.04" />
+      </geometry>
+    </collision>
+    <collision name="offset_fork_crown">
+      <origin rpy="0 0 0" xyz="-0.035 0 -0.075" />
+      <geometry>
+        <box size="0.15 0.07 0.038" />
+      </geometry>
+    </collision>
+    <visual name="offset_fork_crown">
+      <origin rpy="0 0 0" xyz="-0.035 0 -0.075" />
+      <geometry>
+        <box size="0.15 0.07 0.038" />
+      </geometry>
+      <material name="bglx_aluminum">
+        <color rgba="0.68 0.71 0.68 1.0" />
+      </material>
+    </visual>
+    <collision name="mudguard_0">
+      <origin rpy="0 1.216818957 0" xyz="0.2814004365 0 -0.2610106046" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_1">
+      <origin rpy="0 0.9088642179 0" xyz="0.2366418447 0 -0.1806073827" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_2">
+      <origin rpy="0 0.6009094786 0" xyz="0.1696178594 0 -0.117553477" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_3">
+      <origin rpy="0 0.2929547393 0" xyz="0.08663470007 0 -0.07778156615" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_4">
+      <origin rpy="0 -0.015 0" xyz="-0.004499831252 0 -0.06503374937" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_5">
+      <origin rpy="0 -0.3229547393 0" xyz="-0.09521097797 0 -0.08050945591" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_6">
+      <origin rpy="0 -0.6309094786 0" xyz="-0.1769638194 0 -0.1227525921" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_7">
+      <origin rpy="0 -0.9388642179 0" xyz="-0.2420663127 0 -0.1877885437" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="mudguard_8">
+      <origin rpy="0 -1.246818957 0" xyz="-0.2843930297 0 -0.2694981432" />
+      <geometry>
+        <box size="0.101 0.12 0.016" />
+      </geometry>
+    </collision>
+    <collision name="axle_sensor">
+      <origin rpy="0 0 0" xyz="0.035 0.145 -0.34" />
+      <geometry>
+        <box size="0.08 0.075 0.065" />
+      </geometry>
+    </collision>
+    <visual name="bglx_color_steering_0">
+      <origin rpy="0 0 0" xyz="-0.07 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/steering_0.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_steering_0">
+        <color rgba="0.627451 0.666667 0.635294 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_steering_1">
+      <origin rpy="0 0 0" xyz="-0.07 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/steering_1.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_steering_1">
+        <color rgba="0.223529 0.262745 0.231373 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_steering_2">
+      <origin rpy="0 0 0" xyz="-0.07 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/steering_2.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_steering_2">
+        <color rgba="0.737255 0.772549 0.737255 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_steering_3">
+      <origin rpy="0 0 0" xyz="-0.07 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/steering_3.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_steering_3">
+        <color rgba="0.062745 0.090196 0.07451 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_steering_4">
+      <origin rpy="0 0 0" xyz="-0.07 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/steering_4.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_steering_4">
+        <color rgba="0.141176 0.160784 0.145098 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_steering_5">
+      <origin rpy="0 0 0" xyz="-0.07 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/steering_5.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_steering_5">
+        <color rgba="0.031373 0.14902 0.133333 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_steering_6">
+      <origin rpy="0 0 0" xyz="-0.07 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/steering_6.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_steering_6">
+        <color rgba="0.203922 0.47451 0.352941 1.0" />
+      </material>
+    </visual>
+  <visual name="clean_front_bracket_0"><origin xyz="0.29500000000000004 0.0 -0.20500000000000002" rpy="0 2.356194490192345 0" /><geometry><cylinder radius="0.009" length="0.09899494936611665" /></geometry><material name="clean_sensor_bracket"><color rgba="0.12 0.14 0.13 1" /></material></visual><collision name="clean_front_bracket_0"><origin xyz="0.29500000000000004 0.0 -0.20500000000000002" rpy="0 2.356194490192345 0" /><geometry><cylinder radius="0.009" length="0.09899494936611665" /></geometry></collision><visual name="clean_front_bracket_1"><origin xyz="0.34099999999999997 0.0 -0.27" rpy="0 2.790147859586242 0" /><geometry><cylinder radius="0.009" length="0.06390618123468182" /></geometry><material name="clean_sensor_bracket"><color rgba="0.12 0.14 0.13 1" /></material></visual><collision name="clean_front_bracket_1"><origin xyz="0.34099999999999997 0.0 -0.27" rpy="0 2.790147859586242 0" /><geometry><cylinder radius="0.009" length="0.06390618123468182" /></geometry></collision></link>
+  <joint name="steering_joint" type="revolute">
+    <parent link="base_link" />
+    <child link="caster_mount" />
+    <origin rpy="0 0 0" xyz="1.2 0 0.64" />
+    <axis xyz="0 0 1" />
+    <limit effort="80" lower="-1.047" upper="1.047" velocity="1.047" />
+    <dynamics damping=".4" friction=".02" />
+  </joint>
+  <link name="front_wheel">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="2" />
+      <inertia ixx="0.0402125" ixy="0" ixz="0" iyy="0.075625" iyz="0" izz="0.0402125" />
+    </inertial>
+    <collision name="front_wheel_contact">
+      <origin rpy="1.570796327 0 0" xyz="0 0 0" />
+      <geometry>
+        <cylinder length="0.12" radius=".275" />
+      </geometry>
+    </collision>
+    <visual name="bglx_color_front_wheel_0">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/front_wheel_0.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_front_wheel_0">
+        <color rgba="0.094118 0.109804 0.098039 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_front_wheel_1">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/front_wheel_1.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_front_wheel_1">
+        <color rgba="0.627451 0.666667 0.635294 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_front_wheel_2">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/front_wheel_2.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_front_wheel_2">
+        <color rgba="0.223529 0.262745 0.231373 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_front_wheel_3">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/front_wheel_3.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_front_wheel_3">
+        <color rgba="0.737255 0.772549 0.737255 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_front_wheel_4">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/front_wheel_4.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_front_wheel_4">
+        <color rgba="0.062745 0.082353 0.066667 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_front_wheel_5">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/front_wheel_5.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_front_wheel_5">
+        <color rgba="0.466667 0.494118 0.470588 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_front_wheel_6">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/front_wheel_6.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_front_wheel_6">
+        <color rgba="0.062745 0.090196 0.07451 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="front_wheel_joint" type="continuous">
+    <parent link="caster_mount" />
+    <child link="front_wheel" />
+    <origin rpy="0 0 0" xyz="0 0 -0.365" />
+    <axis xyz="0 1 0" />
+    <limit effort="80" velocity="25" />
+    <dynamics damping=".02" friction=".005" />
+  </joint>
+  <gazebo reference="front_wheel">
+    <mu1>0.85</mu1>
+    <mu2>0.85</mu2>
+    <kp>1000000</kp>
+    <kd>100</kd>
+    <minDepth>0.001</minDepth>
+    <maxVel>0.1</maxVel>
+  </gazebo>
+  <link name="rear_left_wheel">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="3.2" />
+      <inertia ixx="0.06344" ixy="0" ixz="0" iyy="0.121" iyz="0" izz="0.06344" />
+    </inertial>
+    <collision name="rear_left_wheel_contact">
+      <origin rpy="1.570796327 0 0" xyz="0 0 0" />
+      <geometry>
+        <cylinder length="0.105" radius=".275" />
+      </geometry>
+    </collision>
+    <visual name="bglx_color_rear_left_wheel_0">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_left_wheel_0.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_left_wheel_0">
+        <color rgba="0.094118 0.109804 0.098039 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_left_wheel_1">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_left_wheel_1.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_left_wheel_1">
+        <color rgba="0.627451 0.666667 0.635294 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_left_wheel_2">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_left_wheel_2.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_left_wheel_2">
+        <color rgba="0.223529 0.262745 0.231373 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_left_wheel_3">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_left_wheel_3.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_left_wheel_3">
+        <color rgba="0.737255 0.772549 0.737255 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_left_wheel_4">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_left_wheel_4.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_left_wheel_4">
+        <color rgba="0.062745 0.082353 0.066667 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="rear_left_wheel" />
+    <origin rpy="0 0 0" xyz="0 0.37 0.275" />
+    <axis xyz="0 1 0" />
+    <limit effort="80" velocity="25" />
+    <dynamics damping=".02" friction=".005" />
+  </joint>
+  <gazebo reference="rear_left_wheel">
+    <mu1>0.85</mu1>
+    <mu2>0.85</mu2>
+    <kp>1000000</kp>
+    <kd>100</kd>
+    <minDepth>0.001</minDepth>
+    <maxVel>0.1</maxVel>
+  </gazebo>
+  <link name="rear_right_wheel">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="3.2" />
+      <inertia ixx="0.06344" ixy="0" ixz="0" iyy="0.121" iyz="0" izz="0.06344" />
+    </inertial>
+    <collision name="rear_right_wheel_contact">
+      <origin rpy="1.570796327 0 0" xyz="0 0 0" />
+      <geometry>
+        <cylinder length="0.105" radius=".275" />
+      </geometry>
+    </collision>
+    <visual name="bglx_color_rear_right_wheel_0">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_right_wheel_0.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_right_wheel_0">
+        <color rgba="0.094118 0.109804 0.098039 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_right_wheel_1">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_right_wheel_1.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_right_wheel_1">
+        <color rgba="0.627451 0.666667 0.635294 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_right_wheel_2">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_right_wheel_2.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_right_wheel_2">
+        <color rgba="0.223529 0.262745 0.231373 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_right_wheel_3">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_right_wheel_3.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_right_wheel_3">
+        <color rgba="0.737255 0.772549 0.737255 1.0" />
+      </material>
+    </visual>
+    <visual name="bglx_color_rear_right_wheel_4">
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="package://etrike_description/meshes/concept_color/rear_right_wheel_4.stl" scale="1 1 1" />
+      </geometry>
+      <material name="bglx_color_rear_right_wheel_4">
+        <color rgba="0.062745 0.082353 0.066667 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="rear_right_wheel" />
+    <origin rpy="0 0 0" xyz="0 -0.37 0.275" />
+    <axis xyz="0 1 0" />
+    <limit effort="80" velocity="25" />
+    <dynamics damping=".02" friction=".005" />
+  </joint>
+  <gazebo reference="rear_right_wheel">
+    <mu1>0.85</mu1>
+    <mu2>0.85</mu2>
+    <kp>1000000</kp>
+    <kd>100</kd>
+    <minDepth>0.001</minDepth>
+    <maxVel>0.1</maxVel>
+  </gazebo>
+  <link name="lidar_sensor">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+  </link>
+  <joint name="lidar_sensor_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="lidar_sensor" />
+    <origin rpy="0 0 0" xyz="0.392 0 1.337" />
+  </joint>
+  <link name="camera_front_main">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+  </link>
+  <joint name="camera_front_main_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="camera_front_main" />
+    <origin rpy="0 0 0" xyz="0.551 0.068 1.283" />
+  </joint>
+  <link name="depth_camera">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+    <collision name="depth_camera_housing">
+      <origin rpy="0 0 0" xyz="-0.028 0 0" />
+      <geometry>
+        <box size="0.05 0.08 0.04" />
+      </geometry>
+    </collision>
+    <visual name="depth_camera_housing">
+      <origin rpy="0 0 0" xyz="-0.028 0 0" />
+      <geometry>
+        <box size="0.05 0.08 0.04" />
+      </geometry>
+      <material name="bglx_sensor">
+        <color rgba="0.12 0.14 0.13 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="depth_camera_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="depth_camera" />
+    <origin rpy="0 0.4 0" xyz="1.05 0 0.88" />
+  </joint>
+  <link name="front_lidar_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+    <collision name="front_lidar_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+    </collision>
+    <visual name="front_lidar_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+      <material name="bglx_sensor">
+        <color rgba="0.12 0.14 0.13 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="front_lidar_link_joint" type="fixed">
+    <parent link="caster_mount" />
+    <child link="front_lidar_link" />
+    <origin rpy="0 0 0" xyz="0.37 0 -0.30" />
+  </joint>
+  <link name="left_depth_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+    <collision name="left_depth_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+    </collision>
+    <visual name="left_depth_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+      <material name="bglx_sensor">
+        <color rgba="0.12 0.14 0.13 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="left_depth_link_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="left_depth_link" />
+    <origin rpy="0 0.45 1.5707963267948966" xyz="0.30 0.327 0.68" />
+  </joint>
+  <link name="right_depth_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+    <collision name="right_depth_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+    </collision>
+    <visual name="right_depth_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+      <material name="bglx_sensor">
+        <color rgba="0.12 0.14 0.13 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="right_depth_link_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="right_depth_link" />
+    <origin rpy="0 0.45 -1.5707963267948966" xyz="0.30 -0.327 0.68" />
+  </joint>
+  <link name="rear_depth_link">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <mass value="0.05" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+    <collision name="rear_depth_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+    </collision>
+    <visual name="rear_depth_link_housing">
+      <origin rpy="0 0 0" xyz="-0.018 0 0" />
+      <geometry>
+        <box size="0.03 0.04 0.035" />
+      </geometry>
+      <material name="bglx_sensor">
+        <color rgba="0.12 0.14 0.13 1.0" />
+      </material>
+    </visual>
+  </link>
+  <joint name="rear_depth_link_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="rear_depth_link" />
+    <origin rpy="0 0.45 3.141592653589793" xyz="-0.192 0 0.68" />
+  </joint>
+  <link name="depth_camera_optical" />
+  <joint name="depth_camera_optical_joint" type="fixed">
+    <parent link="depth_camera" />
+    <child link="depth_camera_optical" />
+    <origin rpy="-1.570796327 0 -1.570796327" xyz="0 0 0" />
+  </joint>
+  <link name="camera_front_main_optical" />
+  <joint name="camera_front_main_optical_joint" type="fixed">
+    <parent link="camera_front_main" />
+    <child link="camera_front_main_optical" />
+    <origin rpy="-1.570796327 0 -1.570796327" xyz="0 0 0" />
+  </joint>
+  <gazebo reference="lidar_sensor">
+    <sensor name="lidar" type="ray">
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>10</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.45</min>
+          <max>30.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <plugin filename="libgazebo_ros_ray_sensor.so" name="scan">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>~/out:=scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>lidar_sensor</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <gazebo reference="camera_front_main">
+    <sensor name="camera_front" type="camera">
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+      <update_rate>30</update_rate>
+      <camera name="front">
+        <horizontal_fov>1.5708</horizontal_fov>
+        <image>
+          <width>800</width>
+          <height>600</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.1</near>
+          <far>100</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.005</stddev>
+        </noise>
+      </camera>
+      <plugin filename="libgazebo_ros_camera.so" name="camera_front_controller">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>image_raw:=/etrike/front/image_raw</remapping>
+          <remapping>camera_info:=/etrike/front/camera_info</remapping>
+        </ros>
+        <camera_name>front</camera_name>
+        <frame_name>camera_front_main_optical</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <gazebo reference="base_link">
+    <sensor name="imu_sensor" type="imu">
+      <always_on>true</always_on>
+      <update_rate>100</update_rate>
+      <visualize>false</visualize>
+      <imu>
+        <angular_velocity>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.0002</stddev>
+            </noise>
+          </z>
+        </angular_velocity>
+        <linear_acceleration>
+          <x>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </x>
+          <y>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </y>
+          <z>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>0.017</stddev>
+            </noise>
+          </z>
+        </linear_acceleration>
+      </imu>
+      <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>~/out:=imu</remapping>
+        </ros>
+        <initial_orientation_as_reference>false</initial_orientation_as_reference>
+        <frame_name>base_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <gazebo reference="depth_camera">
+
+    <sensor name="front_depth" type="depth">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <visualize>false</visualize>
+      <camera name="front_terrain">
+        <horizontal_fov>1.22173</horizontal_fov>
+        <image>
+          <width>320</width>
+          <height>240</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.15</near>
+          <far>4.0</far>
+        </clip>
+      </camera>
+      <plugin filename="libgazebo_ros_camera.so" name="front_terrain_depth_controller">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>image_raw:=/etrike/front_depth/image_raw</remapping><remapping>camera_info:=/etrike/front_depth/camera_info</remapping><remapping>depth/image_raw:=/etrike/front_depth/depth/image_raw</remapping><remapping>depth/camera_info:=/etrike/front_depth/depth/camera_info</remapping><remapping>points:=/etrike/front_depth/points</remapping></ros>
+        <camera_name>front_depth</camera_name>
+        <frame_name>depth_camera_optical</frame_name>
+        <pointCloudCutoff>0.15</pointCloudCutoff>
+        <pointCloudCutoffMax>4.0</pointCloudCutoffMax>
+      </plugin>
+    </sensor>
+  <sensor name="front_terrain_projection" type="camera"><always_on>true</always_on><update_rate>10</update_rate><visualize>true</visualize><camera name="front_terrain">
+        <horizontal_fov>1.22173</horizontal_fov>
+        <image>
+          <width>320</width>
+          <height>240</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.15</near>
+          <far>4.0</far>
+        </clip>
+      </camera>
+      </sensor></gazebo>
+  <gazebo reference="front_lidar_link">
+    <sensor name="front_lidar" type="ray">
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+      <update_rate>15</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>360</samples>
+            <resolution>1</resolution>
+            <min_angle>-2.0944</min_angle>
+            <max_angle>2.0944</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.15</min>
+          <max>5.0</max>
+          <resolution>0.01</resolution>
+        </range>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.01</stddev>
+        </noise>
+      </ray>
+      <plugin filename="libgazebo_ros_ray_sensor.so" name="front_scan">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>~/out:=front_scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>front_lidar_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <gazebo reference="left_depth_link">
+    <material>Gazebo/Black</material>
+    <sensor name="left_depth" type="ray">
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <visualize>false</visualize>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>15</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.35</min_angle>
+            <max_angle>0.35</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>5</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.20</min_angle>
+            <max_angle>0.20</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.05</min>
+          <max>4.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <plugin filename="libgazebo_ros_ray_sensor.so" name="left_depth_controller">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>~/out:=left_depth/scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>left_depth_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <gazebo reference="right_depth_link">
+    <material>Gazebo/Black</material>
+    <sensor name="right_depth" type="ray">
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <visualize>false</visualize>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>15</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.35</min_angle>
+            <max_angle>0.35</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>5</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.20</min_angle>
+            <max_angle>0.20</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.05</min>
+          <max>4.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <plugin filename="libgazebo_ros_ray_sensor.so" name="right_depth_controller">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>~/out:=right_depth/scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>right_depth_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <gazebo reference="rear_depth_link">
+    <material>Gazebo/Black</material>
+    <sensor name="rear_depth" type="ray">
+      <always_on>true</always_on>
+      <update_rate>15</update_rate>
+      <visualize>false</visualize>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>15</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.35</min_angle>
+            <max_angle>0.35</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>5</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.20</min_angle>
+            <max_angle>0.20</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.05</min>
+          <max>4.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </ray>
+      <plugin filename="libgazebo_ros_ray_sensor.so" name="rear_depth_controller">
+        <ros>
+          <namespace>/etrike</namespace>
+          <remapping>~/out:=rear_depth/scan</remapping>
+        </ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>rear_depth_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <joint name="steering_joint">
+      <command_interface name="position">
+        <param name="min">-1.047</param>
+        <param name="max">1.047</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="rear_left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-25.0</param>
+        <param name="max">25.0</param>
+      </command_interface>
+      <state_interface name="velocity" />
+      <state_interface name="position" />
+    </joint>
+    <joint name="rear_right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-25.0</param>
+        <param name="max">25.0</param>
+      </command_interface>
+      <state_interface name="velocity" />
+      <state_interface name="position" />
+    </joint>
+    <joint name="front_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control>
+  <gazebo>
+    <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+      <parameters>/home/ros2/projects/BGLX/bglx_ws/install/etrike_description/share/etrike_description/config/controllers.yaml</parameters>
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
+    </plugin>
+  </gazebo>
+  <gazebo reference="base_link" />
+  <gazebo reference="caster_mount" />
+  <gazebo reference="front_wheel" />
+  <gazebo reference="rear_left_wheel" />
+  <gazebo reference="rear_right_wheel" />
+  <gazebo reference="depth_camera">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="front_lidar_link">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="left_depth_link">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="right_depth_link">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="rear_depth_link">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+</robot>

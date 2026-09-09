@@ -27,12 +27,12 @@ controller_server:
       stateful: true
       plugin: nav2_controller::SimpleGoalChecker
       xy_goal_tolerance: 0.3
-      yaw_goal_tolerance: 3.15    # effectively unconstrained. A tricycle cannot correct heading in place, and use_rotate_to_heading is false, so any heading constraint the vehicle does not naturally satisfy on arrival can only be met by driving loops. Observed 81m of travel for a 5m goal. Heading at a destination is what turn_by is for.
+      yaw_goal_tolerance: 3.15
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 1.2
+      desired_linear_vel: 0.1
       lookahead_dist: 1.2
-      min_lookahead_dist: 1.2    # must exceed the 0.77m turning radius: pure pursuit demands curvature 2sin(a)/L, so a short lookahead asks for turns the steering cannot deliver, the limiter clamps, and the controller saturates
+      min_lookahead_dist: 1.2
       max_lookahead_dist: 3.0
       lookahead_time: 2.0
       use_velocity_scaled_lookahead_dist: true
@@ -50,7 +50,6 @@ controller_server:
       max_angular_accel: 2.0
       max_robot_pose_search_dist: 10.0
       use_interpolation: true
-
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -63,14 +62,15 @@ local_costmap:
       width: 16
       height: 16
       resolution: 0.05
-      footprint: '[[-0.30,-0.40],[1.25,-0.40],[1.25,0.40],[-0.30,0.40]]'
+      footprint: '[[-0.38,-0.52],[1.63,-0.52],[1.63,0.52],[-0.38,0.52]]'
+      footprint_padding: 0.0
       plugins:
       - obstacle_layer
       - inflation_layer
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
-        observation_sources: scan front_scan front_prox left_prox right_prox rear_prox terrain_scan
+        observation_sources: scan front_scan left_prox right_prox rear_prox terrain_scan
         front_scan:
           topic: /etrike/front_scan
           data_type: LaserScan
@@ -81,15 +81,11 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 4.5
           obstacle_min_range: 0.0
+          inf_is_valid: true
         scan:
           topic: /etrike/scan
           max_obstacle_height: 2.0
           clearing: true
-          # The 0.92m scan plane passes OVER low obstacles - a 0.6m bench,
-          # a 0.9m urn - and then raytraces those cells as free, erasing
-          # what the 0.30m front_lidar marked a moment earlier. The low
-          # sensor sees the obstacle; this one deletes it. Restricting the
-          # height band means it can only clear what it can actually observe.
           min_obstacle_height: 0.85
           marking: true
           data_type: LaserScan
@@ -97,16 +93,7 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.0
-        front_prox:
-          topic: /etrike/front_depth/scan
-          data_type: LaserScan
-          clearing: true
-          marking: true
-          max_obstacle_height: 2.0
-          raytrace_max_range: 6.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 5.5
-          obstacle_min_range: 0.0
+          inf_is_valid: true
         left_prox:
           topic: /etrike/left_depth/scan
           data_type: LaserScan
@@ -140,26 +127,18 @@ local_costmap:
         terrain_scan:
           topic: /etrike/terrain/scan
           data_type: LaserScan
-
-          # Persistent terrain memory is marking-only here.
-          # Ordinary obstacle sources clear first; this
-          # terrain observation then re-marks the remembered
-          # hazard in the same ObstacleLayer.
           marking: true
           clearing: false
           inf_is_valid: false
-
           min_obstacle_height: -0.5
           max_obstacle_height: 2.0
-
-          obstacle_min_range: 0.30
-          obstacle_max_range: 3.80
-
+          obstacle_min_range: 0.3
+          obstacle_max_range: 3.8
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        cost_scaling_factor: 2.5
-        inflation_radius: 0.60
-      always_send_full_costmap: false
+        cost_scaling_factor: 3.0
+        inflation_radius: 1.8
+      always_send_full_costmap: true
 global_costmap:
   global_costmap:
     ros__parameters:
@@ -171,7 +150,8 @@ global_costmap:
       resolution: 0.1
       track_unknown_space: false
       rolling_window: false
-      footprint: '[[-0.30,-0.40],[1.25,-0.40],[1.25,0.40],[-0.30,0.40]]'
+      footprint: '[[-0.38,-0.52],[1.63,-0.52],[1.63,0.52],[-0.38,0.52]]'
+      footprint_padding: 0.0
       plugins:
       - static_layer
       - obstacle_layer
@@ -194,15 +174,11 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 4.5
           obstacle_min_range: 0.0
+          inf_is_valid: true
         scan:
           topic: /etrike/scan
           max_obstacle_height: 2.0
           clearing: true
-          # The 0.92m scan plane passes OVER low obstacles - a 0.6m bench,
-          # a 0.9m urn - and then raytraces those cells as free, erasing
-          # what the 0.30m front_lidar marked a moment earlier. The low
-          # sensor sees the obstacle; this one deletes it. Restricting the
-          # height band means it can only clear what it can actually observe.
           min_obstacle_height: 0.85
           marking: true
           data_type: LaserScan
@@ -210,43 +186,29 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.0
+          inf_is_valid: true
       terrain_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
         combination_method: 1
         observation_sources: terrain_scan
-
         terrain_scan:
           topic: /etrike/terrain/scan
           data_type: LaserScan
-
           marking: true
           clearing: true
           inf_is_valid: true
-
           min_obstacle_height: -0.5
           max_obstacle_height: 2.0
-
-          obstacle_min_range: 0.30
-
-          # IMPORTANT:
-          # Real terrain returns may mark obstacles only inside
-          # 3.80 m. Synthetic +inf beams project near range_max
-          # (~4.20 m) and are used ONLY for clearing.
-          #
-          # Keeping a clear separation between obstacle and
-          # raytrace range prevents a false circular obstacle
-          # from being marked around the robot.
-          obstacle_max_range: 3.80
-
+          obstacle_min_range: 0.3
+          obstacle_max_range: 3.8
           raytrace_min_range: 0.0
-          raytrace_max_range: 4.20
-
+          raytrace_max_range: 4.2
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
-        cost_scaling_factor: 1.0
-        inflation_radius: 0.60
-      always_send_full_costmap: false
+        cost_scaling_factor: 3.0
+        inflation_radius: 1.8
+      always_send_full_costmap: true
 planner_server:
   ros__parameters:
     use_sim_time: true
@@ -262,11 +224,11 @@ planner_server:
       max_iterations: 200000
       max_on_approach_iterations: 1000
       max_planning_time: 2.0
-      motion_model_for_search: "DUBIN"
+      motion_model_for_search: REEDS_SHEPP
       angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 5.0
-      minimum_turning_radius: 1.0
+      minimum_turning_radius: 0.75
       reverse_penalty: 2.0
       change_penalty: 3.0
       non_straight_penalty: 1.2

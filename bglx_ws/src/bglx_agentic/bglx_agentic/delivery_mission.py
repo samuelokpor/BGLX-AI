@@ -46,7 +46,7 @@ MAP_QOS = QoSProfile(
 # Nav2 to plan directly to an impossible goal, drive to a safe intermediate
 # point near the current frontier, let SLAM extend /map, then continue toward
 # the ORIGINAL mission waypoint.
-EXPLORATION_EDGE_MARGIN = 1.25
+EXPLORATION_EDGE_MARGIN = 2.13
 EXPLORATION_MIN_STAGE = 0.75
 EXPLORATION_MIN_PROGRESS = 0.40
 EXPLORATION_MAP_WAIT = 4.0

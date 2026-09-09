@@ -17,4 +17,5 @@
     <build_type>ament_python</build_type>
   </export>
   <depend>bglx_msgs</depend>
+  <exec_depend>bglx_navigation</exec_depend>
 </package>

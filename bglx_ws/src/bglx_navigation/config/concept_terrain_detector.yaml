@@ -1,0 +1,28 @@
+# Geometry adjustment only. Distances are measured from base_link at the rear axle.
+terrain_detector:
+  ros__parameters:
+    depth_topic: /etrike/front_depth/depth/image_raw
+    camera_info_topic: /etrike/front_depth/depth/camera_info
+    base_frame: base_link
+    process_hz: 5.0
+    terrain_memory_timeout: 30.0
+    terrain_memory_passed_x: -0.5
+    x_min: 1.65
+    x_max: 5.5
+    fit_half_width: 1.25
+    corridor_half_width: 0.5
+    ground_fit_x_max: 2.45
+    positive_threshold: 0.035
+    positive_min_points: 100
+    hard_stop_distance: 2.4
+    negative_threshold: -0.08
+    negative_min_points: 100
+    ground_support_tolerance: 0.03
+    profile_bin_size: 0.1
+    profile_min_points: 20
+    support_min_points: 30
+    missing_bins_required: 2
+    missing_only_max_start: 2.8
+    slope_min_grade_percent: 3.0
+    slope_max_normal_grade_percent: 12.0
+    slope_fit_max_rmse: 0.005

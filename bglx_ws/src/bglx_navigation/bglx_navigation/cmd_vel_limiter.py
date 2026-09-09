@@ -21,6 +21,9 @@ from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
+from rclpy.time import Time
+from tf2_ros import Buffer, TransformListener, TransformException
+from .concept_scan_geometry import transform_matrix, scan_points, corridor_clearance, usable_scan
 
 
 def clamp(x, lo, hi):
@@ -31,7 +34,7 @@ class CmdVelLimiter(Node):
     def __init__(self):
         super().__init__('cmd_vel_limiter')
 
-        self.declare_parameter('wheelbase', 1.33)
+        self.declare_parameter('wheelbase', 1.20)
         self.declare_parameter('max_steering_angle', 1.047)
         self.declare_parameter('max_lateral_accel', 1.5)
         self.declare_parameter('max_linear_vel', 2.78)
@@ -51,7 +54,13 @@ class CmdVelLimiter(Node):
         self.declare_parameter('front_scan_topic', '/etrike/front_scan')
         self.declare_parameter('front_stop_distance', 1.0)
         self.declare_parameter('front_stop_half_angle_deg', 45.0)
-        self.declare_parameter('front_corridor_half_width', 0.50)
+        self.declare_parameter('front_corridor_half_width', 0.52)
+        # --- speed-scaled clearance cap (test feature, default off) ---
+        self.declare_parameter('use_speed_scaled_cap', False)
+        self.declare_parameter('cap_margin', 0.25)
+        self.declare_parameter('cap_latency', 0.30)
+        self.declare_parameter('cap_brake_accel', 1.0)
+        self.declare_parameter('cap_hard_floor', 0.10)
         self.declare_parameter('front_scan_timeout', 0.75)
         self.declare_parameter('fail_closed_on_front_scan_loss', True)
 
@@ -181,6 +190,9 @@ class CmdVelLimiter(Node):
         self.terrain_fail_closed = bool(
             gp('fail_closed_on_terrain_loss').value)
 
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
         self.pub = self.create_publisher(
             Twist,
             out_topic,
@@ -273,62 +285,76 @@ class CmdVelLimiter(Node):
     def _now_sec(self):
         return self.get_clock().now().nanoseconds * 1e-9
 
+    def _project_scan(self, msg, timeout):
+        stamp = Time.from_msg(msg.header.stamp)
+        age = (self.get_clock().now()-stamp).nanoseconds*1e-9
+        if stamp.nanoseconds <= 0 or age < -0.05 or age > timeout or not usable_scan(msg):
+            raise ValueError('Unusable or stale scan')
+        transform = self.tf_buffer.lookup_transform('base_link', msg.header.frame_id, stamp)
+        points, _ = scan_points(msg, transform_matrix(transform.transform))
+        return points, stamp
+
     def on_front_scan(self, msg: LaserScan):
-        """
-        Find the nearest valid low-LiDAR return that actually
-        intersects the protected forward vehicle corridor.
+        """Distance beyond the front footprint edge, using measured steering TF."""
+        try:
+            points, stamp = self._project_scan(msg, self.front_scan_timeout)
+            near = corridor_clearance(points, True, self.front_corridor_half_width)
+        except (TransformException, ValueError):
+            self._front_scan_stamp = None
+            self._front_near = None
+            return
+        self._front_near = near
+        self._front_scan_stamp = stamp
 
-        The old implementation used the nearest return anywhere
-        inside +/-45 degrees. That can falsely stop the trike on
-        pillars or walls beside an otherwise-clear narrow passage.
-
-        Convert each return to Cartesian coordinates:
-
-            x = forward
-            y = lateral
-
-        and only give emergency-stop authority to obstacles within
-        the configured lateral corridor.
-        """
-
-        nearest_forward = None
-
-        for i, r in enumerate(msg.ranges):
-
-            if not math.isfinite(r):
-                continue
-
-            if r < msg.range_min or r > msg.range_max:
-                continue
-
-            angle = (
-                msg.angle_min
-                + i * msg.angle_increment
-            )
-
-            x = r * math.cos(angle)
-            y = r * math.sin(angle)
-
-            # Ignore anything not physically ahead.
-            if x <= 0.0:
-                continue
-
-            # Ignore obstacles outside the protected
-            # vehicle-width corridor.
-            if (
-                abs(y)
-                > self.front_corridor_half_width
-            ):
-                continue
-
-            if (
-                nearest_forward is None
-                or x < nearest_forward
-            ):
-                nearest_forward = float(x)
-
-        self._front_near = nearest_forward
-        self._front_scan_stamp = self.get_clock().now()
+        # Diagnostic only: report points responsible for near-zero clearance.
+        # Failures here must not change the safety decision.
+        try:
+            floor = float(self.get_parameter('cap_hard_floor').value)
+            now = self._now_sec()
+            if (near is not None and near <= floor and
+                    now - getattr(self, '_last_scan_debug', -1e9) >= 0.25):
+                self._last_scan_debug = now
+                candidates = [
+                    point for point in points
+                    if point[0] >= 0.0
+                    and abs(point[1]) <= self.front_corridor_half_width
+                ]
+                candidates.sort(key=lambda point: float(point[0]))
+                coords = '; '.join(
+                    '(%.3f, %.3f, %.3f)' % tuple(point)
+                    for point in candidates[:6]
+                )
+                sensor_tf = self.tf_buffer.lookup_transform(
+                    'base_link', msg.header.frame_id, stamp)
+                q = sensor_tf.transform.rotation
+                sensor_yaw = math.degrees(math.atan2(
+                    2.0*(q.w*q.z + q.x*q.y),
+                    1.0 - 2.0*(q.y*q.y + q.z*q.z)))
+                steering_text = 'unavailable'
+                try:
+                    steering_tf = self.tf_buffer.lookup_transform(
+                        'base_link', 'caster_mount', stamp)
+                    q = steering_tf.transform.rotation
+                    steering_text = '%.1f' % math.degrees(math.atan2(
+                        2.0*(q.w*q.z + q.x*q.y),
+                        1.0 - 2.0*(q.y*q.y + q.z*q.z)))
+                except TransformException:
+                    pass
+                self.get_logger().warn(
+                    'SCAN_EVIDENCE stamp=%.6f frame=%s '
+                    'sensor_yaw=%.1fdeg fork_yaw=%sdeg '
+                    'clearance=%.3f candidates=%d '
+                    'target_v=%.3f target_w=%.3f '
+                    'base_xyz=[%s]' % (
+                        stamp.nanoseconds * 1e-9,
+                        msg.header.frame_id, sensor_yaw, steering_text,
+                        near, len(candidates),
+                        self._tgt_v, self._tgt_w, coords))
+        except Exception as exc:
+            now = self._now_sec()
+            if now - getattr(self, '_last_debug_error', -1e9) >= 2.0:
+                self._last_debug_error = now
+                self.get_logger().warn('SCAN_EVIDENCE error: %s' % exc)
 
     def _front_guard_reason(self, v):
         """
@@ -360,42 +386,65 @@ class CmdVelLimiter(Node):
                 return 'front_scan stale (%.2fs old)' % age
             return None
 
+        if bool(self.get_parameter('use_speed_scaled_cap').value):
+            # Distance restriction is applied as a speed cap in on_timer().
+            # Staleness / fail-closed vetoes above still apply.
+            return None
+
         if (
             self._front_near is not None
-            and self._front_near <= self.front_stop_distance
+            and self._front_near <= float(
+                self.get_parameter('front_stop_distance').value)
         ):
             return 'low obstacle %.2fm ahead' % self._front_near
 
         return None
 
+    def _front_speed_cap(self):
+        """
+        Largest forward speed whose stopping envelope fits the measured
+        corridor clearance:
+
+            d_required(v) = margin + v * latency + v**2 / (2 * brake)
+
+        solved for the largest v with d_required(v) <= clearance.
+
+        Returns None when no clearance reading exists; that case is
+        already covered by the validity vetoes in _front_guard_reason().
+        """
+
+        near = self._front_near
+
+        if near is None:
+            return None
+
+        margin = float(self.get_parameter('cap_margin').value)
+        latency = float(self.get_parameter('cap_latency').value)
+        brake = float(self.get_parameter('cap_brake_accel').value)
+
+        usable = near - margin
+
+        if usable <= 0.0 or brake <= 0.0:
+            return 0.0
+
+        at = brake * latency
+
+        return max(0.0, min(-at + math.sqrt(at * at + 2.0 * brake * usable),
+                            self.v_max))
+
+
     def on_rear_scan(self, msg: LaserScan):
-        """
-        Find the nearest valid return inside the rear
-        collision-safety arc.
-
-        rear_depth_link is physically rotated to face -X,
-        so angle zero in this LaserScan is straight behind
-        the vehicle.
-        """
-        nearest = None
-
-        for i, r in enumerate(msg.ranges):
-            if not math.isfinite(r):
-                continue
-
-            if r < msg.range_min or r > msg.range_max:
-                continue
-
-            angle = msg.angle_min + i * msg.angle_increment
-
-            if abs(angle) > self.rear_half_angle:
-                continue
-
-            if nearest is None or r < nearest:
-                nearest = float(r)
-
-        self._rear_near = nearest
-        self._rear_scan_stamp = self.get_clock().now()
+        """Clearance from the rear footprint, including the cargo sensor tilt."""
+        try:
+            # gazebo_ros LaserScan uses the centre vertical row.
+            points, stamp = self._project_scan(msg, self.rear_scan_timeout)
+            near = corridor_clearance(points, False, self.front_corridor_half_width)
+        except (TransformException, ValueError):
+            self._rear_scan_stamp = None
+            self._rear_near = None
+            return
+        self._rear_near = near
+        self._rear_scan_stamp = stamp
 
 
     def _rear_guard_reason(self, v):
@@ -442,19 +491,17 @@ class CmdVelLimiter(Node):
 
 
     def on_left_scan(self, msg: LaserScan):
-        """
-        Side scan geometry is handled by Collision Monitor.
-        The final limiter independently tracks freshness only.
-        """
-        self._left_scan_stamp = self.get_clock().now()
+        stamp = Time.from_msg(msg.header.stamp)
+        age = (self.get_clock().now()-stamp).nanoseconds*1e-9
+        self._left_scan_stamp = (stamp if stamp.nanoseconds > 0 and
+            -0.05 <= age <= self.left_scan_timeout and usable_scan(msg) else None)
 
 
     def on_right_scan(self, msg: LaserScan):
-        """
-        Side scan geometry is handled by Collision Monitor.
-        The final limiter independently tracks freshness only.
-        """
-        self._right_scan_stamp = self.get_clock().now()
+        stamp = Time.from_msg(msg.header.stamp)
+        age = (self.get_clock().now()-stamp).nanoseconds*1e-9
+        self._right_scan_stamp = (stamp if stamp.nanoseconds > 0 and
+            -0.05 <= age <= self.right_scan_timeout and usable_scan(msg) else None)
 
 
     def _side_scan_guard_reason(self):
@@ -656,6 +703,71 @@ class CmdVelLimiter(Node):
             self._hard_stop_active = True
             return
 
+        # ---------------------------------------------------------
+        # SPEED-SCALED CLEARANCE CAP
+        #
+        # Caps forward speed by measured clearance instead of vetoing
+        # motion. Angular velocity is scaled with linear velocity so the
+        # commanded curvature (and therefore steering angle) is preserved.
+        # Never raises speed; never converts a zero command into motion.
+        # ---------------------------------------------------------
+
+        w_in = self._tgt_w
+
+        if v > 0.0 and bool(self.get_parameter('use_speed_scaled_cap').value):
+            v_cap = self._front_speed_cap()
+
+            if v_cap is not None and v_cap < v:
+
+                floor = float(self.get_parameter('cap_hard_floor').value)
+
+                if self._front_near is not None and self._front_near <= floor:
+                    # Inside the absolute floor: no forward motion at all.
+                    self._last_w = 0.0
+                    self.pub.publish(Twist())
+                    now_sec = self._now_sec()
+                    if (not self._hard_stop_active
+                            or now_sec - self._last_stop_log_time >= 1.0):
+                        self.get_logger().warn(
+                            'CAP FLOOR STOP: clearance %.2fm <= floor %.2fm'
+                            % (self._front_near, floor))
+                        self._last_stop_log_time = now_sec
+                    self._hard_stop_active = True
+                    return
+
+                if v_cap < self.v_steer_min:
+                    # Creep instead of stopping, so the steering angle
+                    # stays commandable and the vehicle can turn out of
+                    # the situation. Braking distance at this speed is a
+                    # couple of centimetres, far inside the clearance
+                    # that remains above the absolute floor.
+                    v_cap = self.v_steer_min
+
+                if False:
+                    # Below the speed at which steering can be commanded,
+                    # creeping straight ahead is not a safe option.
+                    self._last_w = 0.0
+                    self.pub.publish(Twist())
+
+                    now_sec = self._now_sec()
+
+                    if (
+                        not self._hard_stop_active
+                        or now_sec - self._last_stop_log_time >= 1.0
+                    ):
+                        self.get_logger().warn(
+                            'CAP STOP: clearance %.2fm permits %.3fm/s, '
+                            'below steering threshold %.3fm/s'
+                            % (self._front_near, v_cap, self.v_steer_min))
+
+                        self._last_stop_log_time = now_sec
+
+                    self._hard_stop_active = True
+                    return
+
+                w_in = w_in * (v_cap / v)
+                v = v_cap
+
         if self._hard_stop_active:
             self.get_logger().info(
                 'HARD SAFETY STOP cleared')
@@ -668,7 +780,7 @@ class CmdVelLimiter(Node):
 
         w_target = self._safety_w(
             v,
-            self._tgt_w)
+            w_in)
 
         # Apply the safe yaw-rate command immediately.
         #

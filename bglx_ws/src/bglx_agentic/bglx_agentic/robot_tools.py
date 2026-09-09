@@ -39,6 +39,9 @@ from nav2_msgs.action import NavigateToPose
 
 import tf2_ros
 from tf2_ros import TransformException
+from rclpy.time import Time
+from bglx_navigation.concept_scan_geometry import (
+    transform_matrix, scan_points, corridor_clearance, usable_scan)
 
 from .vision import VisionTool
 from .map_check import compare as compare_map, confidence_note
@@ -67,7 +70,7 @@ MAP_QOS = QoSProfile(reliability=ReliabilityPolicy.RELIABLE,
 BASE_FRAME = 'base_footprint'
 GLOBAL_FRAME = 'map'
 ODOM_FRAME = 'odom'
-FOOTPRINT_FORWARD_REACH = 1.25
+FOOTPRINT_FORWARD_REACH = 1.63
 NAV_TIMEOUT = 180.0
 MISSION_HOME_START_TOLERANCE = 1.0
 MISSION_TOOL_TIMEOUT = 900.0
@@ -151,6 +154,7 @@ class RobotTools(Node):
         self._cov = None
         self._plan_len = 0
         self._front_scan = None
+        self._front_scan_received = None
         self._counts = {'scan': 0, 'front_scan': 0, 'odom': 0, 'costmap': 0}
         self._lock = threading.Lock()
         self._last_failure = "No navigation attempted yet."
@@ -237,6 +241,7 @@ class RobotTools(Node):
     def _on_front_scan(self, msg):
         with self._lock:
             self._front_scan = msg
+            self._front_scan_received = time.monotonic()
             self._counts['front_scan'] += 1
 
     def _on_odom(self, msg):
@@ -835,35 +840,33 @@ class RobotTools(Node):
         return format_scan(summarise_scan(scan))
 
     def check_low_obstacles(self):
-        """Low obstacles ahead, from the front LiDAR at ~0.35m.
-
-        The main LiDAR sits at ~0.98m and sees straight over anything shorter
-        than that: kerbs, boxes, planters, a crouching child. This sensor is
-        the only one that catches them, so a clear answer here is not the same
-        as a clear path, and a blocked answer here outranks a clear costmap.
-        """
+        """Interpret the steering-mounted low scan in the vehicle frame."""
         with self._lock:
-            scan = self._front_scan
-        if scan is None:
-            return ("No front LiDAR data. Low obstacles CANNOT be detected. "
-                    "Treat the ground ahead as unverified.")
-        hits = []
-        for i, r in enumerate(scan.ranges):
-            if not math.isfinite(r) or r < scan.range_min or r > scan.range_max:
-                continue
-            a = math.degrees(scan.angle_min + i * scan.angle_increment)
-            if -60.0 <= a <= 60.0:
-                hits.append((a, r))
-        if not hits:
-            return ("Front LiDAR clear: nothing within %.1fm in the forward "
-                    "120 degree arc, at 0.35m height."
-                    % scan.range_max)
-        ang, near = min(hits, key=lambda t: t[1])
-        side = "ahead" if abs(ang) < 15 else ("left" if ang > 0 else "right")
-        lvl = "BLOCKED" if near < 1.5 else ("CLOSE" if near < 3.0 else "clear")
-        return ("Front LiDAR %s: nearest low obstacle %.2fm %s (%.0f degrees), "
-                "measured at 0.35m height. %d returns in the forward arc."
-                % (lvl, near, side, ang, len(hits)))
+            scan, received = self._front_scan, self._front_scan_received
+        if scan is None or received is None or time.monotonic()-received > 0.75 or not usable_scan(scan):
+            return "Front LiDAR missing, stale or invalid. Ground ahead is UNVERIFIED."
+        try:
+            stamp = Time.from_msg(scan.header.stamp)
+            if stamp.nanoseconds <= 0:
+                raise ValueError('Missing scan timestamp')
+            # A plain agent CLI may use wall time; receipt freshness above is
+            # monotonic. With simulation time enabled also check sensor age.
+            if self.get_parameter('use_sim_time').value:
+                age = (self.get_clock().now()-stamp).nanoseconds*1e-9
+                if age < -0.05 or age > 0.75:
+                    raise ValueError('Stale scan timestamp')
+            tf = self.tf_buffer.lookup_transform('base_link', scan.header.frame_id, stamp)
+            points, _ = scan_points(scan, transform_matrix(tf.transform))
+            near = corridor_clearance(points)
+        except (TransformException, ValueError):
+            return "Front LiDAR transform unavailable at scan time. Ground ahead is UNVERIFIED."
+        if near is None:
+            return ("No low-LiDAR returns inside the forward vehicle corridor in this scan. "
+                    "This does not verify drop-offs, blind spots or the full turning path.")
+        level = 'BLOCKED' if near < 1.5 else ('CLOSE' if near < 3.0 else 'clear')
+        return ("Front LiDAR %s: nearest corridor obstacle %.2fm beyond the front footprint. "
+                "Measured steering and sensor translation accounted for; scan height about 0.34m."
+                % (level, near))
 
     def check_map_against_sensors(self):
         """Does the saved map still match what the LiDAR sees?"""
@@ -2297,7 +2300,7 @@ class RobotTools(Node):
         # So: check the direction of travel before moving, and keep checking
         # while moving. This is not obstacle avoidance - it will not steer
         # around anything - it simply refuses to drive into what it can see.
-        STOP_DIST = 1.6          # m, roughly the forward footprint plus margin
+        STOP_DIST = 2.0          # m, enlarged concept forward envelope plus margin
         direction = 0.0 if float(linear_x) >= 0 else 180.0
         summary = summarise_scan(self._scan)
         if summary:

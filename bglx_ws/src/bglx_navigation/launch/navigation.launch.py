@@ -130,10 +130,11 @@ def generate_launch_description():
             name='cmd_vel_limiter', output='screen',
             parameters=[{
                 'use_sim_time': use_sim_time,
-                'wheelbase': 1.33,
+                'wheelbase': 1.20,
                 'max_steering_angle': 1.047,
                 'max_lateral_accel': 1.5,
                 'max_linear_vel': 2.78,
+                'front_corridor_half_width': 0.52,
                 'input_topic': '/etrike/collision_checked_cmd_vel',
                 'output_topic': '/tricycle_steering_controller/reference_unstamped',
             }],

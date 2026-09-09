@@ -49,12 +49,12 @@ class TerrainDetector(Node):
         # --------------------------------------------------------------
         self.declare_parameter(
             'depth_topic',
-            '/etrike/front_terrain/depth/image_raw'
+            '/etrike/front_depth/depth/image_raw'
         )
 
         self.declare_parameter(
             'camera_info_topic',
-            '/etrike/front_terrain/depth/camera_info'
+            '/etrike/front_depth/depth/camera_info'
         )
 
         self.declare_parameter(
@@ -1925,6 +1925,9 @@ class TerrainDetector(Node):
                     )
                 )
 
+        if not self.has_parameter('positive_obstacle_hard_stop'):
+            self.declare_parameter('positive_obstacle_hard_stop', True)
+
         hard_stop = False
 
         if state == 'GROUND_FIT_FAILED':
@@ -1935,7 +1938,17 @@ class TerrainDetector(Node):
             hazard_distance is not None and
             hazard_distance <= self.hard_stop_distance
         ):
-            hard_stop = True
+            # Positive obstacles are already handled progressively by
+            # the costmap, the collision monitor and the limiter's
+            # clearance cap. Terrain's unique contribution is geometry
+            # nothing else on the vehicle can see - drop-offs, missing
+            # ground, unsafe slope - and those keep the absolute stop.
+            if (state == 'POSITIVE_OBSTACLE' and not bool(
+                    self.get_parameter(
+                        'positive_obstacle_hard_stop').value)):
+                hard_stop = False
+            else:
+                hard_stop = True
 
         hard_msg = Bool()
         hard_msg.data = bool(hard_stop)

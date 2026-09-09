@@ -1,206 +1,170 @@
 #!/usr/bin/env python3
-"""
-BGLX E-Trike Gazebo Simulation Launch File (Track A: tricycle + ros2_control)
-DEST: bglx_ws/src/etrike_description/launch/gazebo.launch.py
-
-Changes vs previous version:
-  - FIX: robot_description is now built with xacro.process_file() at launch
-    time and stripped of XML comments before being handed to
-    robot_state_publisher.
-
-    Why: gazebo_ros2_control (Humble) fetches the URDF from
-    robot_state_publisher and re-injects it into its internal node as a
-    command-line parameter override:  --param robot_description:=<urdf>
-    rcl parses that value as YAML. Any line containing a colon-space, or
-    ending in a colon, makes the YAML scanner treat it as a mapping key and
-    the whole override fails to parse:
-
-        [gazebo_ros2_control]: parser error Couldn't parse parameter
-        override rule: '--param robot_description:=<?xml version="1.0" ?> ...
-
-    The plugin then aborts before creating the controller_manager, so every
-    `ros2 control list_controllers` hangs forever waiting on a service that
-    will never exist. Our .xacro comments ("DEST: ...", "Exposes three
-    joints to ros2_control:") trip exactly this. Stripping comments from the
-    flattened runtime string fixes it; the source .xacro files keep theirs.
-
-    NOTE: this cannot be done with Command(['xacro ', ...]) because launch
-    substitutions are opaque until runtime and cannot be post-processed.
-
-  - FIX: relay odom TF onto /tf.
-
-    steering_controllers_library publishes the odom -> base_link transform
-    on its own namespaced topic, /tricycle_steering_controller/tf_odometry,
-    NOT on /tf. Nothing downstream looks there, so without this relay the
-    'odom' frame simply does not exist: tf2_echo reports "Invalid frame ID",
-    slam_toolbox cannot anchor map -> odom, and every Nav2 costmap stays
-    empty. enable_odom_tf: true in controllers.yaml is necessary but not
-    sufficient.
-
-    Remapping this in the xacro <plugin><ros> block does NOT work: that
-    remaps the plugin's own node, not the controllers spawned inside its
-    controller_manager.
-
-  - passes controllers_file into xacro
-  - remaps robot_state_publisher's joint_states -> /joint_states
-    (fed by joint_state_broadcaster)
-  - spawns joint_state_broadcaster then tricycle_steering_controller,
-    sequenced after the robot is spawned in Gazebo, then starts the odom
-    TF relay once the controller is active
-
-Requires: ros-humble-topic-tools
-"""
+"""BGLX mesh concept in the existing Humble / Gazebo Classic stack."""
 import os
 import re
-
+import json
+import subprocess
+import tempfile
 import xacro
+from pathlib import Path
+import xml.etree.ElementTree as E
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
-                            RegisterEventHandler)
-from launch.event_handlers import OnProcessExit
+from launch.actions import (DeclareLaunchArgument, EmitEvent, IncludeLaunchDescription,
+                            LogInfo, OpaqueFunction, RegisterEventHandler)
+from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessExit, OnShutdown
+from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
-# XML comments do not nest, so a non-greedy DOTALL match is safe here.
-_XML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
 
-# Where steering_controllers_library actually publishes odom TF.
-ODOM_TF_TOPIC = '/tricycle_steering_controller/tf_odometry'
+def cleanup(path):
+    Path(path).unlink(missing_ok=True)
+    return []
 
 
-def build_robot_description(xacro_path: str, controllers_file: str) -> str:
-    """Flatten the xacro and make the result safe to pass through rcl's
-    YAML-based --param override parser (see module docstring)."""
-    doc = xacro.process_file(
-        xacro_path,
-        mappings={'controllers_file': controllers_file},
-    )
-    urdf = doc.toxml()
+def apply_colors(sdf, palette, mesh_dir):
+    count = 0
+    for visual in sdf.findall('.//link/visual'):
+        uri = visual.find('geometry/mesh/uri')
+        if uri is None:
+            continue
+        filename = Path(uri.text).name
+        if filename not in palette or 'concept_color' not in uri.text:
+            continue
+        path = Path(mesh_dir, filename)
+        if not path.is_file():
+            raise RuntimeError(f'Material mesh missing: {path}')
+        uri.text = path.as_uri()
+        for old in visual.findall('material'):
+            visual.remove(old)
+        material = E.SubElement(visual, 'material')
+        rgba = ' '.join(str(v) for v in palette[filename]['rgba'])
+        E.SubElement(material, 'ambient').text = rgba
+        E.SubElement(material, 'diffuse').text = rgba
+        E.SubElement(material, 'specular').text = '0.15 0.15 0.15 1'
+        E.SubElement(material, 'emissive').text = '0 0 0 1'
+        count += 1
+    if count != len(palette):
+        raise RuntimeError(f'Expected {len(palette)} coloured visuals after SDF conversion; got {count}')
+    return count
 
-    # Strip XML comments: these carry the ': ' / trailing-':' sequences that
-    # break gazebo_ros2_control's parameter override parsing.
-    urdf = _XML_COMMENT_RE.sub('', urdf)
 
-    # Collapse the blank lines the comment removal leaves behind.
-    urdf = re.sub(r'\n\s*\n+', '\n', urdf).strip()
+def colored_description(desc):
+    urdf_path = Path(desc, 'urdf', 'etrike.urdf.xacro')
+    controller_path = str(Path(desc, 'config', 'controllers.yaml'))
+    robot = xacro.process_file(str(urdf_path), mappings={'controllers_file': controller_path}).toxml()
+    robot = re.sub(r'<!--.*?-->', '', robot, flags=re.DOTALL).strip()
+    robot = E.tostring(E.fromstring(robot), encoding='unicode')
+    if ': ' in robot:
+        raise RuntimeError('robot_description contains colon-space; cannot pass Classic parameter parser')
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.urdf') as source:
+        source.write(robot)
+        source.flush()
+        converted = subprocess.run(['gz', 'sdf', '-p', source.name],
+                                   capture_output=True, text=True, check=True, timeout=45)
+    sdf = E.fromstring(converted.stdout)
+    urdf = E.fromstring(robot)
+    if len(sdf.findall('.//sensor')) != len(urdf.findall('.//sensor')):
+        raise RuntimeError('Sensor count changed during SDF conversion')
+    palette = json.loads(Path(desc, 'meshes', 'concept_color', 'palette.json').read_text())
+    count = apply_colors(sdf, palette, Path(desc, 'meshes', 'concept_color'))
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.sdf', prefix='bglx_color_', delete=False) as file:
+        file.write(E.tostring(sdf, encoding='unicode', xml_declaration=False))
+        filename = file.name
+    print(f'BGLX: {count} explicit Gazebo material assignments; {len(sdf.findall(".//sensor"))} sensors retained.')
+    return robot, filename
 
-    # Fail loudly at launch time rather than 30s into a hung spawner.
-    if '<!--' in urdf:
-        raise RuntimeError(
-            'robot_description still contains XML comments after stripping; '
-            'gazebo_ros2_control will fail to parse it.'
-        )
 
-    return urdf
+def on_success(next_actions, stage):
+    def finished(event, context):
+        if event.returncode != 0:
+            reason = f'{stage} failed with exit code {event.returncode}; see the preceding log.'
+            return [LogInfo(msg=reason), EmitEvent(event=Shutdown(reason=reason))]
+        return next_actions
+    return finished
+
+
+def start(context):
+    if LaunchConfiguration('use_sim_time').perform(context).lower() != 'true':
+        raise RuntimeError('Gazebo integration requires use_sim_time:=true for stamped scan safety')
+    desc = get_package_share_directory('etrike_description')
+    nav = get_package_share_directory('bglx_navigation')
+    gazebo = get_package_share_directory('gazebo_ros')
+    world = os.path.abspath(os.path.expanduser(LaunchConfiguration('world').perform(context)))
+    if not os.path.isfile(world):
+        raise RuntimeError(f'World file does not exist: {world}')
+    robot, sdf_path = colored_description(desc)
+    scan_filter = Node(package='bglx_navigation', executable='concept_front_scan_filter',
+                       name='bglx_front_scan_filter', output='screen',
+                       parameters=[{'use_sim_time': True, 'robot_description': robot}])
+    state = Node(package='robot_state_publisher', executable='robot_state_publisher',
+                 name='robot_state_publisher', output='screen',
+                 parameters=[{'use_sim_time': True, 'robot_description': robot}],
+                 remappings=[('joint_states', '/joint_states')])
+    spawn = Node(package='gazebo_ros', executable='spawn_entity.py', name='spawn_etrike',
+                 output='screen', arguments=[
+                     '-file', sdf_path, '-entity', 'bglx_etrike',
+                     '-x', LaunchConfiguration('x'), '-y', LaunchConfiguration('y'),
+                     '-z', LaunchConfiguration('z'), '-Y', LaunchConfiguration('yaw'),
+                     '-timeout', '90.0'])
+    def controller(name):
+        return Node(package='controller_manager', executable='spawner', output='screen',
+                    arguments=[name, '--controller-manager', '/controller_manager',
+                               '--controller-manager-timeout', '90'])
+    jsb = controller('joint_state_broadcaster')
+    drive = controller('tricycle_steering_controller')
+    ekf = Node(package='robot_localization', executable='ekf_node', name='ekf_filter_node',
+               output='screen', parameters=[os.path.join(nav, 'config', 'ekf.yaml'),
+                                            {'use_sim_time': True}])
+    # Register before executing processes, and stop the launch on a failed stage.
+    events = [
+        RegisterEventHandler(OnProcessExit(target_action=spawn,
+            on_exit=on_success([jsb], 'Robot spawn'))),
+        RegisterEventHandler(OnProcessExit(target_action=jsb,
+            on_exit=on_success([drive], 'Joint state broadcaster activation'))),
+        RegisterEventHandler(OnProcessExit(target_action=drive,
+            on_exit=on_success([ekf, LogInfo(msg='Concept controllers active; EKF starting.')],
+                               'Tricycle controller activation'))),
+    ]
+    from launch.actions import ExecuteProcess
+    server = ExecuteProcess(
+        cmd=['gzserver', world, '--verbose',
+             '-s', 'libgazebo_ros_init.so',
+             '-s', 'libgazebo_ros_factory.so',
+             '-s', 'libgazebo_ros_force_system.so',
+             '--ros-args', '--params-file',
+             os.path.join(
+                 get_package_share_directory('etrike_description'),
+                 'config', 'gazebo_clock.yaml')],
+        output='screen')
+    client = IncludeLaunchDescription(PythonLaunchDescriptionSource(
+        os.path.join(gazebo, 'launch', 'gzclient.launch.py')), condition=IfCondition(LaunchConfiguration('gui')))
+    events.append(RegisterEventHandler(OnShutdown(
+        on_shutdown=lambda event, context: cleanup(sdf_path))))
+    viewer = Node(package='rviz2', executable='rviz2', name='concept_sensor_viewer',
+                  output='screen', parameters=[{'use_sim_time': True}],
+                  arguments=['-d', os.path.join(desc, 'rviz', 'concept_sensors.rviz')],
+                  condition=IfCondition(LaunchConfiguration('viewer')))
+    events.append(RegisterEventHandler(OnProcessExit(target_action=scan_filter,
+        on_exit=on_success([], "Front scan filter"))))
+    return events + [server, client, state, scan_filter, spawn, viewer]
 
 
 def generate_launch_description():
-    pkg_dir = get_package_share_directory('etrike_description')
-    urdf_file = os.path.join(pkg_dir, 'urdf', 'etrike.urdf.xacro')
-    world_file = os.path.join(pkg_dir, 'worlds', 'campus.world')
-    controllers_file = os.path.join(pkg_dir, 'config', 'controllers.yaml')
-
-    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
-    world = LaunchConfiguration('world', default=world_file)
-
-    # Evaluated eagerly at launch-description generation time (not a
-    # substitution), so it can be post-processed before it reaches the node.
-    robot_description = build_robot_description(urdf_file, controllers_file)
-
-    gazebo_server = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            os.path.join(get_package_share_directory('gazebo_ros'),
-                         'launch', 'gzserver.launch.py')
-        ]),
-        launch_arguments={'world': world, 'pause': 'false'}.items()
-    )
-
-    gazebo_client = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            os.path.join(get_package_share_directory('gazebo_ros'),
-                         'launch', 'gzclient.launch.py')
-        ])
-    )
-
-    robot_state_publisher = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='screen',
-        parameters=[{'robot_description': robot_description,
-                     'use_sim_time': use_sim_time}],
-        # joint states are published by joint_state_broadcaster
-        remappings=[('joint_states', '/joint_states')],
-    )
-
-    spawn_robot = Node(
-        package='gazebo_ros',
-        executable='spawn_entity.py',
-        name='spawn_etrike',
-        output='screen',
-        arguments=['-topic', 'robot_description', '-entity', 'bglx_etrike',
-                   '-x', '0.0', '-y', '0.0', '-z', '0.3', '-Y', '0.0'],
-    )
-
-    # --- ros2_control spawners ---
-    # The gazebo_ros2_control plugin declares no <ros><namespace>, so the
-    # controller_manager comes up at the ROOT namespace: /controller_manager.
-    # controllers.yaml is keyed 'controller_manager:' to match.
-    jsb_spawner = Node(
-        package='controller_manager', executable='spawner', output='screen',
-        arguments=['joint_state_broadcaster',
-                   '--controller-manager', '/controller_manager'],
-    )
-
-    tricycle_spawner = Node(
-        package='controller_manager', executable='spawner', output='screen',
-        arguments=['tricycle_steering_controller',
-                   '--controller-manager', '/controller_manager'],
-    )
-
-    # --- odom TF relay ---
-    # Started only after the controller is active, so the source topic
-    # already exists and relay does not have to discover it cold.
-    # The EKF owns odom -> base_link. The tricycle controller no longer
-    # publishes it (enable_odom_tf: false in controllers.yaml) because two
-    # nodes broadcasting the same transform produces TF jitter that is
-    # miserable to debug.
-    ekf_node = Node(
-        package='robot_localization', executable='ekf_node',
-        name='ekf_filter_node', output='screen',
-        parameters=[os.path.join(
-            get_package_share_directory('bglx_navigation'),
-            'config', 'ekf.yaml')],
-    )
-
-    # Sequence:
-    #   spawn robot -> joint_state_broadcaster -> tricycle controller
-    #                                          -> odom TF relay
-    jsb_after_spawn = RegisterEventHandler(
-        OnProcessExit(target_action=spawn_robot, on_exit=[jsb_spawner])
-    )
-
-    tricycle_after_jsb = RegisterEventHandler(
-        OnProcessExit(target_action=jsb_spawner, on_exit=[tricycle_spawner])
-    )
-
-    relay_after_tricycle = RegisterEventHandler(
-        OnProcessExit(target_action=tricycle_spawner, on_exit=[ekf_node])
-    )
-
+    desc = get_package_share_directory('etrike_description')
+    default_world = str(Path(desc, 'worlds', 'campus.world'))
     return LaunchDescription([
-        DeclareLaunchArgument('use_sim_time', default_value='true',
-                              description='Use simulation time'),
-        DeclareLaunchArgument('world', default_value=world_file,
-                              description='World file to load'),
-        gazebo_server,
-        gazebo_client,
-        robot_state_publisher,
-        spawn_robot,
-        jsb_after_spawn,
-        tricycle_after_jsb,
-        relay_after_tricycle,
+        DeclareLaunchArgument('use_sim_time', default_value='true', description='Simulation requires true'),
+        DeclareLaunchArgument('world', default_value=default_world),
+        DeclareLaunchArgument('gui', default_value='true'),
+        DeclareLaunchArgument('viewer', default_value='false'),
+        DeclareLaunchArgument('x', default_value='0.0'),
+        DeclareLaunchArgument('y', default_value='0.0'),
+        DeclareLaunchArgument('z', default_value='0.03'),
+        DeclareLaunchArgument('yaw', default_value='0.0'),
+        OpaqueFunction(function=start),
     ])

@@ -1,0 +1,166 @@
+Panels:
+- Class: rviz_common/Displays
+  Name: Displays
+- Class: rviz_common/Views
+  Name: Views
+Visualization Manager:
+  Class: ''
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 38; 42; 48
+    Frame Rate: 20
+  Displays:
+  - Class: rviz_default_plugins/Grid
+    Name: Ground grid
+    Enabled: true
+    Cell Size: 1
+    Plane: XY
+    Plane Cell Count: 30
+    Color: 110; 115; 120
+    Alpha: 0.3
+  - Class: rviz_default_plugins/RobotModel
+    Name: Trike
+    Enabled: true
+    Description Source: Topic
+    Description Topic:
+      Value: /robot_description
+      Depth: 5
+      Reliability Policy: Reliable
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+    Visual Enabled: true
+    Collision Enabled: false
+    Alpha: 1
+    Links:
+      All Links Enabled: true
+  - Class: rviz_default_plugins/Image
+    Name: Front RGB
+    Enabled: true
+    Topic:
+      Value: /etrike/front/image_raw
+      Depth: 5
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+    Transport Hint: raw
+    Queue Size: 2
+  - Class: rviz_default_plugins/Image
+    Name: Terrain depth
+    Enabled: true
+    Topic:
+      Value: /etrike/front_depth/depth/image_raw
+      Depth: 5
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+    Transport Hint: raw
+    Queue Size: 2
+    Normalize Range: true
+  - Class: rviz_default_plugins/LaserScan
+    Name: Roof LiDAR
+    Enabled: true
+    Topic:
+      Value: /etrike/scan
+      Depth: 5
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+    Size (Pixels): 3
+    Size (m): 0.035
+    Style: Flat Squares
+    Color Transformer: FlatColor
+    Color: 0; 220; 255
+    Alpha: 1
+    Decay Time: 0
+    Position Transformer: XYZ
+    Use Fixed Frame: true
+  - Class: rviz_default_plugins/LaserScan
+    Name: Front low LiDAR
+    Enabled: true
+    Topic:
+      Value: /etrike/front_scan
+      Depth: 5
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+    Size (Pixels): 3
+    Size (m): 0.035
+    Style: Flat Squares
+    Color Transformer: FlatColor
+    Color: 255; 160; 40
+    Alpha: 1
+    Decay Time: 0
+    Position Transformer: XYZ
+    Use Fixed Frame: true
+  - Class: rviz_default_plugins/LaserScan
+    Name: Left proximity
+    Enabled: false
+    Topic:
+      Value: /etrike/left_depth/scan
+      Depth: 5
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+    Size (Pixels): 3
+    Size (m): 0.035
+    Style: Flat Squares
+    Color Transformer: FlatColor
+    Color: 80; 255; 110
+    Alpha: 1
+    Decay Time: 0
+    Position Transformer: XYZ
+    Use Fixed Frame: true
+  - Class: rviz_default_plugins/LaserScan
+    Name: Right proximity
+    Enabled: false
+    Topic:
+      Value: /etrike/right_depth/scan
+      Depth: 5
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+    Size (Pixels): 3
+    Size (m): 0.035
+    Style: Flat Squares
+    Color Transformer: FlatColor
+    Color: 220; 90; 255
+    Alpha: 1
+    Decay Time: 0
+    Position Transformer: XYZ
+    Use Fixed Frame: true
+  - Class: rviz_default_plugins/LaserScan
+    Name: Rear proximity
+    Enabled: false
+    Topic:
+      Value: /etrike/rear_depth/scan
+      Depth: 5
+      Reliability Policy: Best Effort
+      Durability Policy: Volatile
+      History Policy: Keep Last
+    Size (Pixels): 3
+    Size (m): 0.035
+    Style: Flat Squares
+    Color Transformer: FlatColor
+    Color: 255; 90; 90
+    Alpha: 1
+    Decay Time: 0
+    Position Transformer: XYZ
+    Use Fixed Frame: true
+  Tools:
+  - Class: rviz_default_plugins/Interact
+  - Class: rviz_default_plugins/MoveCamera
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Target Frame: base_link
+      Distance: 3.6
+      Pitch: 0.42
+      Yaw: 0.95
+      Focal Point:
+        X: 0.5
+        Y: 0
+        Z: 0.6
+Window Geometry:
+  Width: 1450
+  Height: 900

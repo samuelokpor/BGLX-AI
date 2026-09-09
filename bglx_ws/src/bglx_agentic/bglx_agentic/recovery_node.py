@@ -80,9 +80,9 @@ exploring, not completing a delivery, and not reaching the original goal.
 PLATFORM
 - A tricycle with Ackermann steering. It CANNOT rotate in place. It changes
   heading only while moving forward or backward.
-- It needs roughly 1.6m of clear space all round to turn around.
-- It is 1.55m long and 0.80m wide.
-- The LiDAR sees 360 degrees, but only in one horizontal plane at 0.92m. It is
+- Its full footprint sweeps roughly a 4.1m diameter at maximum steering.
+- Its conservative footprint is 2.01m long and 1.04m wide.
+- The LiDAR sees 360 degrees, but only in one horizontal plane at 1.337m. It is
   blind to anything lower - kerbs, steps, dropped objects.
 
 HOW TO WORK

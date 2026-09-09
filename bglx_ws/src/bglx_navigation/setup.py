@@ -27,6 +27,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'concept_front_scan_filter = bglx_navigation.concept_front_scan_filter:main',
             'cmd_vel_limiter = bglx_navigation.cmd_vel_limiter:main',
             'terrain_detector = bglx_navigation.terrain_detector:main',
         ],

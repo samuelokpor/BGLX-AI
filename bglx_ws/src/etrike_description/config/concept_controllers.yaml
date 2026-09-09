@@ -1,0 +1,45 @@
+# Humble wheel order is RIGHT, LEFT. Dimensions match concept.urdf.xacro.
+controller_manager:
+  ros__parameters:
+    update_rate: 50
+    use_sim_time: true
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    tricycle_steering_controller:
+      type: tricycle_steering_controller/TricycleSteeringController
+tricycle_steering_controller:
+  ros__parameters:
+    use_sim_time: true
+    wheelbase: 1.2
+    wheel_track: 0.74
+    front_wheels_radius: 0.275
+    rear_wheels_radius: 0.275
+    front_steering: true
+    front_wheels_names:
+    - steering_joint
+    rear_wheels_names:
+    - rear_right_wheel_joint
+    - rear_left_wheel_joint
+    open_loop: false
+    position_feedback: false
+    velocity_rolling_window_size: 10
+    base_frame_id: base_link
+    odom_frame_id: odom
+    enable_odom_tf: false
+    twist_covariance_diagonal:
+    - 0.001
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.01
+    pose_covariance_diagonal:
+    - 0.001
+    - 0.001
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.01
+    use_stamped_vel: false
+    reference_timeout: 0.5
+    reduce_wheel_speed_until_steering_reached: false
