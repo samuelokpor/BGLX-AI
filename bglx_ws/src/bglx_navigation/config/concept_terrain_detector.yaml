@@ -1,4 +1,3 @@
-# Geometry adjustment only. Distances are measured from base_link at the rear axle.
 terrain_detector:
   ros__parameters:
     depth_topic: /etrike/front_depth/depth/image_raw
@@ -26,3 +25,4 @@ terrain_detector:
     slope_min_grade_percent: 3.0
     slope_max_normal_grade_percent: 12.0
     slope_fit_max_rmse: 0.005
+    positive_obstacle_hard_stop: false

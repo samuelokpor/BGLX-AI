@@ -25,3 +25,4 @@ terrain_detector:
     slope_min_grade_percent: 3.0
     slope_max_normal_grade_percent: 12.0
     slope_fit_max_rmse: 0.005
+    positive_obstacle_hard_stop: false
