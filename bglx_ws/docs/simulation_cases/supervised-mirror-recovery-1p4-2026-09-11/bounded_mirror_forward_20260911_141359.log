@@ -1,0 +1,117 @@
+FORWARD REALIGNMENT → PASSAGE: existing scene
+Existing gap=1.400m; current clearance=3.9159m
+Actual start: map=(-0.0000,-0.0000); along=-5.9250m lateral=+1.0700m heading_vs_gap=-15.000deg box_clearance=3.9159m
+AUDIT: length=10.089m reverse=0.000m minimum=0.1800m intersections=0 endpoint_error=0.000m
+PASS geometry: setback=2.2 scale=0.8 clearance=0.1800m
+AUDIT: length=10.095m reverse=0.000m minimum=0.1800m intersections=0 endpoint_error=0.000m
+PASS geometry: setback=2.2 scale=1.0 clearance=0.1800m
+AUDIT: length=10.102m reverse=0.000m minimum=0.1800m intersections=0 endpoint_error=0.000m
+PASS geometry: setback=2.2 scale=1.2 clearance=0.1800m
+AUDIT: length=10.081m reverse=0.000m minimum=0.1800m intersections=0 endpoint_error=0.000m
+PASS geometry: setback=2.0 scale=0.8 clearance=0.1800m
+AUDIT: length=10.087m reverse=0.000m minimum=0.1800m intersections=0 endpoint_error=0.000m
+PASS geometry: setback=2.0 scale=1.0 clearance=0.1800m
+AUDIT: length=10.094m reverse=0.000m minimum=0.1800m intersections=0 endpoint_error=0.000m
+PASS geometry: setback=2.0 scale=1.2 clearance=0.1800m
+AUDIT: length=10.078m reverse=0.000m minimum=0.1462m intersections=0 endpoint_error=0.000m
+Rejected setback=1.9 scale=0.8: Screen failed: min=0.1462, hits=0, reverse=0.000, route=True, endpoint=0.000
+AUDIT: length=10.083m reverse=0.000m minimum=0.1606m intersections=0 endpoint_error=0.000m
+Rejected setback=1.9 scale=1.0: Screen failed: min=0.1606, hits=0, reverse=0.000, route=True, endpoint=0.000
+AUDIT: length=10.090m reverse=0.000m minimum=0.1688m intersections=0 endpoint_error=0.000m
+Rejected setback=1.9 scale=1.2: Screen failed: min=0.1688, hits=0, reverse=0.000, route=True, endpoint=0.000
+Ranking: clearance within 5mm of best -> earliest alignment
+GLOBAL: complete forward route
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+LOCAL: next 0.500m, including the full footprint
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+SELECTED: straighten 2.2m before pillars; minimum=0.1800m
+RViz path: /supervised_gap/selected_path (nav_msgs/Path; fixed frame map)
+
+TRIKE WILL MOVE — FORWARD REALIGNMENT AND CONTINUOUS PASSAGE
+t=   0.5 clr=3.883 xte=0.000 heading_error=+0.05deg | NAV v=+0.100 w=-0.013 steer=-9.1deg age=0.04s | CM v=+0.100 w=-0.013 steer=-9.1deg age=0.02s | LIM v=+0.100 w=-0.013 steer=-9.1deg age=0.01s | MEASURED=-9.2deg age=0.02s
+t=   1.0 clr=3.835 xte=0.000 heading_error=+0.20deg | NAV v=+0.100 w=-0.013 steer=-8.9deg age=0.05s | CM v=+0.100 w=-0.013 steer=-8.9deg age=0.03s | LIM v=+0.100 w=-0.013 steer=-8.9deg age=0.02s | MEASURED=-8.9deg age=0.02s
+t=   1.5 clr=3.786 xte=0.000 heading_error=+0.30deg | NAV v=+0.100 w=-0.013 steer=-8.5deg age=0.06s | CM v=+0.100 w=-0.013 steer=-8.5deg age=0.04s | LIM v=+0.100 w=-0.013 steer=-8.5deg age=0.02s | MEASURED=-8.6deg age=0.01s
+t=   2.0 clr=3.738 xte=0.001 heading_error=+0.37deg | NAV v=+0.100 w=-0.012 steer=-8.2deg age=0.01s | CM v=+0.100 w=-0.012 steer=-8.2deg age=0.04s | LIM v=+0.100 w=-0.012 steer=-8.2deg age=0.02s | MEASURED=-8.2deg age=0.02s
+t=   2.5 clr=3.688 xte=0.001 heading_error=+0.41deg | NAV v=+0.100 w=-0.011 steer=-7.8deg age=0.02s | CM v=+0.100 w=-0.011 steer=-7.8deg age=0.01s | LIM v=+0.100 w=-0.011 steer=-7.8deg age=0.01s | MEASURED=-7.9deg age=0.02s
+t=   3.0 clr=3.640 xte=0.001 heading_error=+0.42deg | NAV v=+0.100 w=-0.011 steer=-7.4deg age=0.02s | CM v=+0.100 w=-0.011 steer=-7.4deg age=0.02s | LIM v=+0.100 w=-0.011 steer=-7.5deg age=0.01s | MEASURED=-7.5deg age=0.02s
+t=   3.5 clr=3.593 xte=0.002 heading_error=+0.42deg | NAV v=+0.100 w=-0.010 steer=-7.0deg age=0.03s | CM v=+0.100 w=-0.010 steer=-7.0deg age=0.01s | LIM v=+0.100 w=-0.010 steer=-7.1deg age=0.02s | MEASURED=-7.1deg age=0.01s
+t=   4.0 clr=3.545 xte=0.002 heading_error=+0.41deg | NAV v=+0.100 w=-0.010 steer=-6.6deg age=0.03s | CM v=+0.100 w=-0.010 steer=-6.6deg age=0.01s | LIM v=+0.100 w=-0.010 steer=-6.7deg age=0.02s | MEASURED=-6.7deg age=0.01s
+t=   4.5 clr=3.497 xte=0.002 heading_error=+0.38deg | NAV v=+0.100 w=-0.009 steer=-6.2deg age=0.04s | CM v=+0.100 w=-0.009 steer=-6.2deg age=0.02s | LIM v=+0.100 w=-0.009 steer=-6.2deg age=0.02s | MEASURED=-6.2deg age=0.01s
+t=   5.1 clr=3.450 xte=0.003 heading_error=+0.35deg | NAV v=+0.100 w=-0.008 steer=-5.8deg age=0.04s | CM v=+0.100 w=-0.008 steer=-5.8deg age=0.02s | LIM v=+0.100 w=-0.009 steer=-5.8deg age=0.03s | MEASURED=-5.8deg age=0.01s
+t=   5.6 clr=3.401 xte=0.003 heading_error=+0.31deg | NAV v=+0.100 w=-0.008 steer=-5.4deg age=0.04s | CM v=+0.100 w=-0.008 steer=-5.4deg age=0.03s | LIM v=+0.100 w=-0.008 steer=-5.4deg age=0.01s | MEASURED=-5.4deg age=0.02s
+t=   6.1 clr=3.354 xte=0.003 heading_error=+0.27deg | NAV v=+0.100 w=-0.007 steer=-5.0deg age=0.04s | CM v=+0.100 w=-0.007 steer=-5.0deg age=0.03s | LIM v=+0.100 w=-0.007 steer=-5.0deg age=0.02s | MEASURED=-5.0deg age=0.03s
+t=   6.6 clr=3.306 xte=0.004 heading_error=+0.23deg | NAV v=+0.100 w=-0.007 steer=-4.6deg age=0.06s | CM v=+0.100 w=-0.007 steer=-4.6deg age=0.03s | LIM v=+0.100 w=-0.007 steer=-4.6deg age=0.02s | MEASURED=-4.6deg age=0.01s
+t=   7.1 clr=3.250 xte=0.004 heading_error=+0.21deg | NAV v=+0.100 w=-0.006 steer=-4.4deg age=0.06s | CM v=+0.100 w=-0.006 steer=-4.4deg age=0.04s | LIM v=+0.100 w=-0.006 steer=-4.4deg age=0.02s | MEASURED=-4.5deg age=0.01s
+t=   7.6 clr=3.203 xte=0.005 heading_error=+0.15deg | NAV v=+0.100 w=-0.006 steer=-4.0deg age=0.06s | CM v=+0.100 w=-0.006 steer=-4.0deg age=0.04s | LIM v=+0.100 w=-0.006 steer=-4.0deg age=0.02s | MEASURED=-4.0deg age=0.01s
+t=   8.1 clr=3.156 xte=0.005 heading_error=+0.10deg | NAV v=+0.100 w=-0.005 steer=-3.5deg age=0.01s | CM v=+0.100 w=-0.005 steer=-3.6deg age=0.04s | LIM v=+0.100 w=-0.005 steer=-3.6deg age=0.02s | MEASURED=-3.6deg age=0.02s
+t=   8.6 clr=3.107 xte=0.005 heading_error=+0.06deg | NAV v=+0.100 w=-0.004 steer=-3.1deg age=0.02s | CM v=+0.100 w=-0.004 steer=-3.1deg age=0.01s | LIM v=+0.100 w=-0.005 steer=-3.1deg age=0.01s | MEASURED=-3.1deg age=0.02s
+t=   9.1 clr=3.060 xte=0.005 heading_error=+0.01deg | NAV v=+0.100 w=-0.004 steer=-2.7deg age=0.02s | CM v=+0.100 w=-0.004 steer=-2.7deg age=0.06s | LIM v=+0.100 w=-0.004 steer=-2.7deg age=0.01s | MEASURED=-2.7deg age=0.02s
+t=   9.6 clr=3.013 xte=0.005 heading_error=-0.02deg | NAV v=+0.100 w=-0.003 steer=-2.3deg age=0.02s | CM v=+0.100 w=-0.003 steer=-2.3deg age=0.06s | LIM v=+0.100 w=-0.003 steer=-2.3deg age=0.01s | MEASURED=-2.3deg age=0.02s
+t=  10.1 clr=2.966 xte=0.005 heading_error=-0.05deg | NAV v=+0.100 w=-0.003 steer=-1.9deg age=0.03s | CM v=+0.100 w=-0.003 steer=-1.9deg age=0.07s | LIM v=+0.100 w=-0.003 steer=-1.9deg age=0.01s | MEASURED=-1.9deg age=0.02s
+t=  10.6 clr=2.919 xte=0.005 heading_error=-0.08deg | NAV v=+0.100 w=-0.002 steer=-1.5deg age=0.02s | CM v=+0.100 w=-0.002 steer=-1.6deg age=0.06s | LIM v=+0.100 w=-0.002 steer=-1.6deg age=0.01s | MEASURED=-1.6deg age=0.02s
+t=  11.1 clr=2.872 xte=0.005 heading_error=-0.11deg | NAV v=+0.100 w=-0.002 steer=-1.2deg age=0.03s | CM v=+0.100 w=-0.002 steer=-1.2deg age=0.02s | LIM v=+0.100 w=-0.002 steer=-1.2deg age=0.02s | MEASURED=-1.2deg age=0.01s
+t=  11.6 clr=2.826 xte=0.005 heading_error=-0.13deg | NAV v=+0.100 w=-0.001 steer=-0.8deg age=0.03s | CM v=+0.100 w=-0.001 steer=-0.8deg age=0.02s | LIM v=+0.100 w=-0.001 steer=-0.9deg age=0.02s | MEASURED=-0.9deg age=0.01s
+t=  12.1 clr=2.778 xte=0.004 heading_error=-0.14deg | NAV v=+0.100 w=-0.001 steer=-0.5deg age=0.05s | CM v=+0.100 w=-0.001 steer=-0.5deg age=0.03s | LIM v=+0.100 w=-0.001 steer=-0.5deg age=0.01s | MEASURED=-0.5deg age=0.02s
+t=  12.6 clr=2.731 xte=0.004 heading_error=-0.16deg | NAV v=+0.100 w=-0.000 steer=-0.2deg age=0.05s | CM v=+0.100 w=-0.000 steer=-0.2deg age=0.04s | LIM v=+0.100 w=-0.000 steer=-0.2deg age=0.03s | MEASURED=-0.2deg age=0.03s
+t=  13.1 clr=2.685 xte=0.004 heading_error=-0.17deg | NAV v=+0.100 w=+0.000 steer=+0.1deg age=0.01s | CM v=+0.100 w=+0.000 steer=+0.1deg age=0.04s | LIM v=+0.100 w=+0.000 steer=+0.1deg age=0.02s | MEASURED=+0.1deg age=0.01s
+t=  13.6 clr=2.639 xte=0.004 heading_error=-0.17deg | NAV v=+0.100 w=+0.001 steer=+0.4deg age=0.01s | CM v=+0.100 w=+0.001 steer=+0.4deg age=0.03s | LIM v=+0.100 w=+0.001 steer=+0.4deg age=0.02s | MEASURED=+0.4deg age=0.01s
+t=  14.1 clr=2.593 xte=0.004 heading_error=-0.17deg | NAV v=+0.100 w=+0.001 steer=+0.7deg age=0.01s | CM v=+0.100 w=+0.001 steer=+0.6deg age=0.04s | LIM v=+0.100 w=+0.001 steer=+0.6deg age=0.03s | MEASURED=+0.6deg age=0.02s
+t=  14.6 clr=2.545 xte=0.004 heading_error=-0.17deg | NAV v=+0.100 w=+0.001 steer=+0.9deg age=0.02s | CM v=+0.100 w=+0.001 steer=+0.9deg age=0.06s | LIM v=+0.100 w=+0.001 steer=+0.9deg age=0.01s | MEASURED=+0.9deg age=0.02s
+t=  15.1 clr=2.499 xte=0.004 heading_error=-0.17deg | NAV v=+0.100 w=+0.002 steer=+1.2deg age=0.02s | CM v=+0.100 w=+0.002 steer=+1.2deg age=0.07s | LIM v=+0.100 w=+0.002 steer=+1.2deg age=0.01s | MEASURED=+1.2deg age=0.02s
+t=  15.6 clr=2.453 xte=0.003 heading_error=-0.16deg | NAV v=+0.100 w=+0.002 steer=+1.4deg age=0.03s | CM v=+0.100 w=+0.002 steer=+1.4deg age=0.06s | LIM v=+0.100 w=+0.002 steer=+1.4deg age=0.01s | MEASURED=+1.4deg age=0.02s
+t=  16.1 clr=2.408 xte=0.003 heading_error=-0.16deg | NAV v=+0.100 w=+0.002 steer=+1.7deg age=0.02s | CM v=+0.100 w=+0.002 steer=+1.6deg age=0.06s | LIM v=+0.100 w=+0.002 steer=+1.6deg age=0.01s | MEASURED=+1.6deg age=0.02s
+t=  16.6 clr=2.362 xte=0.003 heading_error=-0.15deg | NAV v=+0.100 w=+0.003 steer=+1.9deg age=0.02s | CM v=+0.100 w=+0.003 steer=+1.9deg age=0.05s | LIM v=+0.100 w=+0.003 steer=+1.9deg age=0.01s | MEASURED=+1.8deg age=0.02s
+t=  17.1 clr=2.317 xte=0.003 heading_error=-0.14deg | NAV v=+0.100 w=+0.003 steer=+2.1deg age=0.02s | CM v=+0.100 w=+0.003 steer=+2.1deg age=0.01s | LIM v=+0.100 w=+0.003 steer=+2.1deg age=0.01s | MEASURED=+2.1deg age=0.02s
+t=  17.6 clr=2.271 xte=0.003 heading_error=-0.13deg | NAV v=+0.100 w=+0.003 steer=+2.3deg age=0.03s | CM v=+0.100 w=+0.003 steer=+2.3deg age=0.07s | LIM v=+0.100 w=+0.003 steer=+2.3deg age=0.01s | MEASURED=+2.3deg age=0.02s
+t=  18.1 clr=2.226 xte=0.003 heading_error=-0.12deg | NAV v=+0.100 w=+0.004 steer=+2.6deg age=0.03s | CM v=+0.100 w=+0.004 steer=+2.6deg age=0.01s | LIM v=+0.100 w=+0.004 steer=+2.6deg age=0.02s | MEASURED=+2.6deg age=0.03s
+t=  18.6 clr=2.181 xte=0.003 heading_error=-0.11deg | NAV v=+0.100 w=+0.004 steer=+2.8deg age=0.03s | CM v=+0.100 w=+0.004 steer=+2.8deg age=0.02s | LIM v=+0.100 w=+0.004 steer=+2.8deg age=0.02s | MEASURED=+2.8deg age=0.02s
+t=  19.1 clr=2.136 xte=0.003 heading_error=-0.10deg | NAV v=+0.100 w=+0.004 steer=+3.0deg age=0.04s | CM v=+0.100 w=+0.004 steer=+3.0deg age=0.03s | LIM v=+0.100 w=+0.004 steer=+3.0deg age=0.02s | MEASURED=+3.0deg age=0.01s
+t=  19.7 clr=2.091 xte=0.003 heading_error=-0.09deg | NAV v=+0.100 w=+0.005 steer=+3.2deg age=0.05s | CM v=+0.100 w=+0.005 steer=+3.2deg age=0.03s | LIM v=+0.100 w=+0.005 steer=+3.2deg age=0.02s | MEASURED=+3.2deg age=0.01s
+t=  20.2 clr=2.044 xte=0.002 heading_error=-0.07deg | NAV v=+0.100 w=+0.005 steer=+3.5deg age=0.05s | CM v=+0.100 w=+0.005 steer=+3.5deg age=0.04s | LIM v=+0.100 w=+0.005 steer=+3.5deg age=0.03s | MEASURED=+3.4deg age=0.02s
+t=  20.7 clr=2.001 xte=0.002 heading_error=-0.06deg | NAV v=+0.100 w=+0.005 steer=+3.7deg age=0.06s | CM v=+0.100 w=+0.005 steer=+3.7deg age=0.05s | LIM v=+0.100 w=+0.005 steer=+3.7deg age=0.03s | MEASURED=+3.7deg age=0.02s
+t=  21.2 clr=1.954 xte=0.002 heading_error=-0.05deg | NAV v=+0.100 w=+0.006 steer=+3.9deg age=0.05s | CM v=+0.100 w=+0.006 steer=+3.9deg age=0.04s | LIM v=+0.100 w=+0.006 steer=+3.9deg age=0.01s | MEASURED=+3.9deg age=0.02s
+t=  21.7 clr=1.910 xte=0.002 heading_error=-0.03deg | NAV v=+0.100 w=+0.006 steer=+4.2deg age=0.01s | CM v=+0.100 w=+0.006 steer=+4.1deg age=0.05s | LIM v=+0.100 w=+0.006 steer=+4.1deg age=0.02s | MEASURED=+4.1deg age=0.02s
+t=  22.2 clr=1.865 xte=0.002 heading_error=-0.02deg | NAV v=+0.100 w=+0.006 steer=+4.4deg age=0.07s | CM v=+0.100 w=+0.006 steer=+4.4deg age=0.06s | LIM v=+0.100 w=+0.006 steer=+4.4deg age=0.02s | MEASURED=+4.4deg age=0.03s
+t=  22.7 clr=1.821 xte=0.002 heading_error=-0.01deg | NAV v=+0.100 w=+0.007 steer=+4.7deg age=0.02s | CM v=+0.100 w=+0.007 steer=+4.6deg age=0.05s | LIM v=+0.100 w=+0.007 steer=+4.6deg age=0.02s | MEASURED=+4.6deg age=0.01s
+t=  23.2 clr=1.776 xte=0.002 heading_error=+0.00deg | NAV v=+0.100 w=+0.007 steer=+4.9deg age=0.08s | CM v=+0.100 w=+0.007 steer=+4.9deg age=0.06s | LIM v=+0.100 w=+0.007 steer=+4.9deg age=0.02s | MEASURED=+4.9deg age=0.03s
+t=  23.7 clr=1.732 xte=0.002 heading_error=+0.02deg | NAV v=+0.100 w=+0.008 steer=+5.2deg age=0.03s | CM v=+0.100 w=+0.008 steer=+5.2deg age=0.02s | LIM v=+0.100 w=+0.008 steer=+5.2deg age=0.03s | MEASURED=+5.2deg age=0.02s
+t=  24.2 clr=1.686 xte=0.002 heading_error=+0.03deg | NAV v=+0.100 w=+0.008 steer=+5.5deg age=0.03s | CM v=+0.100 w=+0.008 steer=+5.5deg age=0.06s | LIM v=+0.100 w=+0.008 steer=+5.5deg age=0.01s | MEASURED=+5.5deg age=0.02s
+t=  24.7 clr=1.641 xte=0.002 heading_error=+0.04deg | NAV v=+0.100 w=+0.008 steer=+5.8deg age=0.03s | CM v=+0.100 w=+0.008 steer=+5.8deg age=0.02s | LIM v=+0.100 w=+0.008 steer=+5.8deg age=0.01s | MEASURED=+5.8deg age=0.02s
+t=  25.2 clr=1.597 xte=0.002 heading_error=+0.05deg | NAV v=+0.100 w=+0.009 steer=+6.1deg age=0.04s | CM v=+0.100 w=+0.009 steer=+6.1deg age=0.03s | LIM v=+0.100 w=+0.009 steer=+6.1deg age=0.01s | MEASURED=+6.1deg age=0.02s
+t=  25.7 clr=1.553 xte=0.002 heading_error=+0.07deg | NAV v=+0.100 w=+0.009 steer=+6.4deg age=0.04s | CM v=+0.100 w=+0.009 steer=+6.4deg age=0.03s | LIM v=+0.100 w=+0.009 steer=+6.4deg age=0.01s | MEASURED=+6.4deg age=0.02s
+t=  26.2 clr=1.509 xte=0.002 heading_error=+0.08deg | NAV v=+0.100 w=+0.010 steer=+6.8deg age=0.03s | CM v=+0.100 w=+0.010 steer=+6.8deg age=0.02s | LIM v=+0.100 w=+0.010 steer=+6.8deg age=0.01s | MEASURED=+6.8deg age=0.02s
+t=  26.7 clr=1.465 xte=0.003 heading_error=+0.10deg | NAV v=+0.100 w=+0.010 steer=+7.2deg age=0.03s | CM v=+0.100 w=+0.010 steer=+7.2deg age=0.03s | LIM v=+0.100 w=+0.010 steer=+7.2deg age=0.01s | MEASURED=+7.1deg age=0.02s
+t=  27.2 clr=1.421 xte=0.003 heading_error=+0.11deg | NAV v=+0.100 w=+0.011 steer=+7.6deg age=0.04s | CM v=+0.100 w=+0.011 steer=+7.6deg age=0.03s | LIM v=+0.100 w=+0.011 steer=+7.6deg age=0.01s | MEASURED=+7.5deg age=0.02s
+t=  27.7 clr=1.377 xte=0.003 heading_error=+0.13deg | NAV v=+0.100 w=+0.012 steer=+8.0deg age=0.03s | CM v=+0.100 w=+0.012 steer=+8.0deg age=0.03s | LIM v=+0.100 w=+0.012 steer=+8.0deg age=0.01s | MEASURED=+7.9deg age=0.02s
+t=  28.2 clr=1.333 xte=0.003 heading_error=+0.14deg | NAV v=+0.100 w=+0.012 steer=+8.4deg age=0.04s | CM v=+0.100 w=+0.012 steer=+8.4deg age=0.02s | LIM v=+0.100 w=+0.012 steer=+8.4deg age=0.01s | MEASURED=+8.4deg age=0.02s
+t=  28.7 clr=1.289 xte=0.003 heading_error=+0.16deg | NAV v=+0.100 w=+0.013 steer=+8.9deg age=0.05s | CM v=+0.100 w=+0.013 steer=+8.9deg age=0.02s | LIM v=+0.100 w=+0.013 steer=+8.9deg age=0.01s | MEASURED=+8.8deg age=0.02s
+t=  29.2 clr=1.245 xte=0.003 heading_error=+0.18deg | NAV v=+0.100 w=+0.014 steer=+9.4deg age=0.05s | CM v=+0.100 w=+0.014 steer=+9.4deg age=0.03s | LIM v=+0.100 w=+0.014 steer=+9.4deg age=0.02s | MEASURED=+9.3deg age=0.02s
+t=  29.7 clr=1.200 xte=0.003 heading_error=+0.20deg | NAV v=+0.100 w=+0.015 steer=+9.9deg age=0.06s | CM v=+0.100 w=+0.015 steer=+9.9deg age=0.04s | LIM v=+0.100 w=+0.015 steer=+9.9deg age=0.02s | MEASURED=+9.9deg age=0.03s
+t=  30.2 clr=1.156 xte=0.003 heading_error=+0.23deg | NAV v=+0.100 w=+0.015 steer=+10.5deg age=0.05s | CM v=+0.100 w=+0.015 steer=+10.5deg age=0.03s | LIM v=+0.100 w=+0.015 steer=+10.5deg age=0.02s | MEASURED=+10.5deg age=0.01s
+t=  30.7 clr=1.112 xte=0.004 heading_error=+0.25deg | NAV v=+0.100 w=+0.016 steer=+11.2deg age=0.06s | CM v=+0.100 w=+0.016 steer=+11.2deg age=0.04s | LIM v=+0.100 w=+0.016 steer=+11.2deg age=0.02s | MEASURED=+11.1deg age=0.01s
+t=  31.2 clr=1.067 xte=0.004 heading_error=+0.28deg | NAV v=+0.100 w=+0.017 steer=+11.8deg age=0.06s | CM v=+0.100 w=+0.017 steer=+11.8deg age=0.04s | LIM v=+0.100 w=+0.017 steer=+11.8deg age=0.02s | MEASURED=+11.8deg age=0.03s
+t=  31.7 clr=1.023 xte=0.004 heading_error=+0.31deg | NAV v=+0.100 w=+0.019 steer=+12.7deg age=0.01s | CM v=+0.100 w=+0.019 steer=+12.6deg age=0.04s | LIM v=+0.100 w=+0.019 steer=+12.6deg age=0.02s | MEASURED=+12.5deg age=0.01s
+t=  32.2 clr=0.978 xte=0.004 heading_error=+0.35deg | NAV v=+0.100 w=+0.020 steer=+13.4deg age=0.08s | CM v=+0.100 w=+0.020 steer=+13.4deg age=0.06s | LIM v=+0.100 w=+0.020 steer=+13.4deg age=0.03s | MEASURED=+13.3deg age=0.05s
+t=  32.7 clr=0.933 xte=0.005 heading_error=+0.38deg | NAV v=+0.100 w=+0.021 steer=+14.4deg age=0.02s | CM v=+0.100 w=+0.021 steer=+14.2deg age=0.05s | LIM v=+0.100 w=+0.021 steer=+14.2deg age=0.02s | MEASURED=+14.2deg age=0.01s
+t=  33.2 clr=0.887 xte=0.005 heading_error=+0.43deg | NAV v=+0.100 w=+0.023 steer=+15.3deg age=0.02s | CM v=+0.100 w=+0.023 steer=+15.2deg age=0.06s | LIM v=+0.100 w=+0.023 steer=+15.2deg age=0.02s | MEASURED=+15.1deg age=0.03s
+t=  33.7 clr=0.841 xte=0.005 heading_error=+0.47deg | NAV v=+0.100 w=+0.024 steer=+16.0deg age=0.02s | CM v=+0.100 w=+0.024 steer=+15.9deg age=0.06s | LIM v=+0.100 w=+0.024 steer=+15.9deg age=0.03s | MEASURED=+15.9deg age=0.01s
+t=  34.2 clr=0.795 xte=0.006 heading_error=+0.50deg | NAV v=+0.100 w=+0.024 steer=+16.4deg age=0.02s | CM v=+0.100 w=+0.024 steer=+16.3deg age=0.06s | LIM v=+0.100 w=+0.024 steer=+16.3deg age=0.03s | MEASURED=+16.3deg age=0.02s
+t=  34.7 clr=0.747 xte=0.006 heading_error=+0.50deg | NAV v=+0.100 w=+0.025 steer=+16.5deg age=0.03s | CM v=+0.100 w=+0.025 steer=+16.5deg age=0.07s | LIM v=+0.100 w=+0.025 steer=+16.5deg age=0.01s | MEASURED=+16.5deg age=0.02s
+t=  35.2 clr=0.701 xte=0.007 heading_error=+0.45deg | NAV v=+0.100 w=+0.024 steer=+16.4deg age=0.03s | CM v=+0.100 w=+0.024 steer=+16.4deg age=0.01s | LIM v=+0.100 w=+0.025 steer=+16.4deg age=0.01s | MEASURED=+16.4deg age=0.02s
+t=  35.7 clr=0.655 xte=0.007 heading_error=+0.33deg | NAV v=+0.100 w=+0.024 steer=+16.1deg age=0.03s | CM v=+0.100 w=+0.024 steer=+16.1deg age=0.06s | LIM v=+0.100 w=+0.024 steer=+16.1deg age=0.01s | MEASURED=+16.1deg age=0.02s
+t=  36.2 clr=0.609 xte=0.007 heading_error=+0.14deg | NAV v=+0.100 w=+0.023 steer=+15.7deg age=0.04s | CM v=+0.100 w=+0.023 steer=+15.7deg age=0.03s | LIM v=+0.100 w=+0.023 steer=+15.7deg age=0.02s | MEASURED=+15.7deg age=0.01s
+t=  36.7 clr=0.564 xte=0.007 heading_error=-0.14deg | NAV v=+0.100 w=+0.022 steer=+15.1deg age=0.04s | CM v=+0.100 w=+0.022 steer=+15.1deg age=0.03s | LIM v=+0.100 w=+0.022 steer=+15.1deg age=0.02s | MEASURED=+15.1deg age=0.01s
+t=  37.2 clr=0.510 xte=0.007 heading_error=-0.52deg | NAV v=+0.100 w=+0.021 steer=+14.4deg age=0.05s | CM v=+0.100 w=+0.021 steer=+14.4deg age=0.04s | LIM v=+0.100 w=+0.021 steer=+14.4deg age=0.03s | MEASURED=+14.5deg age=0.02s
+t=  37.7 clr=0.456 xte=0.006 heading_error=-1.01deg | NAV v=+0.100 w=+0.020 steer=+13.7deg age=0.04s | CM v=+0.100 w=+0.020 steer=+13.7deg age=0.04s | LIM v=+0.100 w=+0.020 steer=+13.7deg age=0.02s | MEASURED=+13.7deg age=0.01s
+t=  38.3 clr=0.400 xte=0.005 heading_error=-1.66deg | NAV v=+0.100 w=+0.019 steer=+12.9deg age=0.06s | CM v=+0.100 w=+0.019 steer=+12.9deg age=0.05s | LIM v=+0.100 w=+0.019 steer=+12.9deg age=0.01s | MEASURED=+12.9deg age=0.02s
+t=  38.8 clr=0.349 xte=0.003 heading_error=-2.43deg | NAV v=+0.100 w=+0.018 steer=+11.9deg age=0.01s | CM v=+0.100 w=+0.018 steer=+12.0deg age=0.05s | LIM v=+0.100 w=+0.018 steer=+12.0deg age=0.02s | MEASURED=+12.1deg age=0.03s
+t=  39.3 clr=0.300 xte=0.001 heading_error=-2.89deg | NAV v=+0.100 w=+0.016 steer=+11.1deg age=0.01s | CM v=+0.100 w=+0.016 steer=+11.2deg age=0.05s | LIM v=+0.100 w=+0.016 steer=+11.2deg age=0.01s | MEASURED=+11.3deg age=0.02s
+t=  39.8 clr=0.253 xte=0.001 heading_error=-2.44deg | NAV v=+0.100 w=+0.015 steer=+10.2deg age=0.01s | CM v=+0.100 w=+0.015 steer=+10.3deg age=0.05s | LIM v=+0.100 w=+0.015 steer=+10.3deg age=0.01s | MEASURED=+10.4deg age=0.03s
+t=  40.3 clr=0.211 xte=0.003 heading_error=-2.02deg | NAV v=+0.100 w=+0.014 steer=+9.3deg age=0.02s | CM v=+0.100 w=+0.014 steer=+9.4deg age=0.06s | LIM v=+0.100 w=+0.014 steer=+9.4deg age=0.02s | MEASURED=+9.4deg age=0.01s
+t=  40.8 clr=0.176 xte=0.005 heading_error=-1.65deg | NAV v=+0.100 w=+0.012 steer=+8.4deg age=0.03s | CM v=+0.100 w=+0.012 steer=+8.5deg age=0.06s | LIM v=+0.100 w=+0.012 steer=+8.5deg age=0.03s | MEASURED=+8.5deg age=0.02s
+t=  41.3 clr=0.152 xte=0.006 heading_error=-1.29deg | NAV v=+0.100 w=+0.011 steer=+7.6deg age=0.03s | CM v=+0.100 w=+0.011 steer=+7.6deg age=0.02s | LIM v=+0.100 w=+0.011 steer=+7.6deg age=0.01s | MEASURED=+7.6deg age=0.02s
+TEST STOPPED: Clearance guard: 0.1500m; cancelling
+Cancel response: 0
+Final action status: 5
+Odometry confirms stopped: True
+Original controller parameters restored.

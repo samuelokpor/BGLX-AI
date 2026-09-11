@@ -1,0 +1,67 @@
+EXACT REVERSE ALIGNMENT — MOTION TEST
+Existing gap=1.400m; current clearance=0.1493m
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+TRIKE WILL REVERSE along 1.027m curve; audited minimum=0.1493m; max curvature=0.089/m
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  0.6 clr=0.1694 xte=0.0000 target=0.989m heading=-1.12deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  1.1 clr=0.2058 xte=0.0001 target=0.936m heading=-1.00deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  1.7 clr=0.2481 xte=0.0003 target=0.882m heading=-0.90deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  2.3 clr=0.3008 xte=0.0004 target=0.820m heading=-0.78deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  2.8 clr=0.3489 xte=0.0006 target=0.766m heading=-0.68deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  3.3 clr=0.3909 xte=0.0007 target=0.720m heading=-0.61deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  3.8 clr=0.4409 xte=0.0009 target=0.666m heading=-0.52deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  4.3 clr=0.4897 xte=0.0010 target=0.614m heading=-0.45deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  4.9 clr=0.5371 xte=0.0011 target=0.564m heading=-0.38deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  5.4 clr=0.5904 xte=0.0011 target=0.508m heading=-0.31deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  5.9 clr=0.6398 xte=0.0012 target=0.456m heading=-0.24deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  6.5 clr=0.6916 xte=0.0012 target=0.402m heading=-0.16deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  7.0 clr=0.7420 xte=0.0012 target=0.350m heading=-0.09deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  7.5 clr=0.7926 xte=0.0011 target=0.298m heading=-0.03deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  8.0 clr=0.8435 xte=0.0010 target=0.246m heading=+0.04deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  8.6 clr=0.8943 xte=0.0009 target=0.194m heading=+0.11deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  9.1 clr=0.9450 xte=0.0007 target=0.142m heading=+0.19deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t=  9.6 clr=1.0153 xte=0.0038 target=0.069m heading=-0.93deg
+  local: lethal encounters=0; unknown encounters=0; outside grid=False
+  global: lethal encounters=0; unknown encounters=0; outside grid=False
+t= 10.1 clr=1.0661 xte=0.0013 target=0.013m heading=-3.70deg
+TEST STOPPED: Unexpected forward command during reverse
+Cancel response: 0
+Final action status: 5
+Odometry confirms stopped: True
+Original controller parameters restored.
