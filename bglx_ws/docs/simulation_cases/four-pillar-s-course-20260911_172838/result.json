@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "run_id": "four_direct_f6aa5e7321174306a814680bb14a7b46",
+  "stage": "forward",
+  "code": "SUCCESS",
+  "stopped": true,
+  "cleanup_ok": true,
+  "metrics": {
+    "planned_clearances": [
+      2.9174299541330937,
+      1.7782857873647777,
+      0.29929423148294176,
+      0.21270680396494013
+    ],
+    "length": 4.122105373779805,
+    "minimum_clearance": 0.2106271321456892,
+    "goal_error": 0.27816675987858913
+  }
+}
