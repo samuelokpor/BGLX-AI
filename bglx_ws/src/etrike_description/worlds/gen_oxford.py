@@ -223,6 +223,51 @@ world = """<?xml version="1.0" ?>
     <include><uri>model://sun</uri></include>
     <include><uri>model://ground_plane</uri></include>
 
+<!-- BGLX_CAMPUS_GROUND_VISUAL_V1_BEGIN -->
+<model name="bglx_campus_ground_visual_v1">
+  <static>true</static>
+  <pose>0 0 0 0 0 0</pose>
+  <link name="ground_visual_extension">
+      <visual name="north">
+        <pose>0 125 0 0 0 0</pose>
+        <cast_shadows>false</cast_shadows>
+        <geometry><plane><normal>0 0 1</normal><size>100 150</size></plane></geometry>
+        <material><script>
+          <uri>file://media/materials/scripts/gazebo.material</uri>
+          <name>Gazebo/Grey</name>
+        </script></material>
+      </visual>
+      <visual name="south">
+        <pose>0 -125 0 0 0 0</pose>
+        <cast_shadows>false</cast_shadows>
+        <geometry><plane><normal>0 0 1</normal><size>100 150</size></plane></geometry>
+        <material><script>
+          <uri>file://media/materials/scripts/gazebo.material</uri>
+          <name>Gazebo/Grey</name>
+        </script></material>
+      </visual>
+      <visual name="east">
+        <pose>125 0 0 0 0 0</pose>
+        <cast_shadows>false</cast_shadows>
+        <geometry><plane><normal>0 0 1</normal><size>150 400</size></plane></geometry>
+        <material><script>
+          <uri>file://media/materials/scripts/gazebo.material</uri>
+          <name>Gazebo/Grey</name>
+        </script></material>
+      </visual>
+      <visual name="west">
+        <pose>-125 0 0 0 0 0</pose>
+        <cast_shadows>false</cast_shadows>
+        <geometry><plane><normal>0 0 1</normal><size>150 400</size></plane></geometry>
+        <material><script>
+          <uri>file://media/materials/scripts/gazebo.material</uri>
+          <name>Gazebo/Grey</name>
+        </script></material>
+      </visual>
+  </link>
+</model>
+<!-- BGLX_CAMPUS_GROUND_VISUAL_V1_END -->
+
     <scene>
       <ambient>0.6 0.6 0.6 1</ambient>
       <background>0.75 0.8 0.85 1</background>

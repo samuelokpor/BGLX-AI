@@ -17,6 +17,7 @@ controller_server:
     progress_checker_plugin: progress_checker
     goal_checker_plugins:
     - general_goal_checker
+    - alignment_goal_checker
     controller_plugins:
     - FollowPath
     progress_checker:
@@ -30,11 +31,11 @@ controller_server:
       yaw_goal_tolerance: 3.15
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 0.1
-      lookahead_dist: 1.2
-      min_lookahead_dist: 1.2
-      max_lookahead_dist: 3.0
-      lookahead_time: 2.0
+      desired_linear_vel: 0.7
+      lookahead_dist: 0.6
+      min_lookahead_dist: 0.6
+      max_lookahead_dist: 1.2
+      lookahead_time: 1.5
       use_velocity_scaled_lookahead_dist: true
       transform_tolerance: 0.2
       use_collision_detection: true
@@ -50,6 +51,11 @@ controller_server:
       max_angular_accel: 2.0
       max_robot_pose_search_dist: 10.0
       use_interpolation: true
+    alignment_goal_checker:
+      plugin: nav2_controller::SimpleGoalChecker
+      xy_goal_tolerance: 0.05
+      yaw_goal_tolerance: 0.017453292519943295
+      stateful: false
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -62,7 +68,7 @@ local_costmap:
       width: 16
       height: 16
       resolution: 0.05
-      footprint: '[[-0.38,-0.52],[1.63,-0.52],[1.63,0.52],[-0.38,0.52]]'
+      footprint: '[[-0.20,-0.285],[1.04,-0.285],[1.04,0.285],[-0.20,0.285]]'
       footprint_padding: 0.0
       plugins:
       - obstacle_layer
@@ -95,6 +101,7 @@ local_costmap:
           obstacle_min_range: 0.0
           inf_is_valid: true
         left_prox:
+          min_obstacle_height: 0.03
           topic: /etrike/left_depth/scan
           data_type: LaserScan
           clearing: true
@@ -105,6 +112,7 @@ local_costmap:
           obstacle_max_range: 1.5
           obstacle_min_range: 0.0
         right_prox:
+          min_obstacle_height: 0.03
           topic: /etrike/right_depth/scan
           data_type: LaserScan
           clearing: true
@@ -115,6 +123,7 @@ local_costmap:
           obstacle_max_range: 1.5
           obstacle_min_range: 0.0
         rear_prox:
+          min_obstacle_height: 0.03
           topic: /etrike/rear_depth/scan
           data_type: LaserScan
           clearing: true
@@ -143,14 +152,14 @@ global_costmap:
   global_costmap:
     ros__parameters:
       use_sim_time: true
-      update_frequency: 1.0
-      publish_frequency: 0.5
+      update_frequency: 2.0
+      publish_frequency: 2.0
       global_frame: map
       robot_base_frame: base_footprint
-      resolution: 0.1
+      resolution: 0.05
       track_unknown_space: false
-      rolling_window: false
-      footprint: '[[-0.38,-0.52],[1.63,-0.52],[1.63,0.52],[-0.38,0.52]]'
+      rolling_window: true
+      footprint: '[[-0.20,-0.285],[1.04,-0.285],[1.04,0.285],[-0.20,0.285]]'
       footprint_padding: 0.0
       plugins:
       - static_layer
@@ -182,9 +191,9 @@ global_costmap:
           min_obstacle_height: 0.85
           marking: true
           data_type: LaserScan
-          raytrace_max_range: 12.0
+          raytrace_max_range: 30.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 10.0
+          obstacle_max_range: 25.0
           obstacle_min_range: 0.0
           inf_is_valid: true
       terrain_layer:
@@ -209,6 +218,8 @@ global_costmap:
         cost_scaling_factor: 3.0
         inflation_radius: 1.8
       always_send_full_costmap: true
+      width: 100
+      height: 200
 planner_server:
   ros__parameters:
     use_sim_time: true
@@ -222,9 +233,9 @@ planner_server:
       downsample_costmap: false
       downsampling_factor: 1
       allow_unknown: true
-      max_iterations: 200000
+      max_iterations: 1000000
       max_on_approach_iterations: 1000
-      max_planning_time: 2.0
+      max_planning_time: 5.0
       motion_model_for_search: DUBIN
       angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5

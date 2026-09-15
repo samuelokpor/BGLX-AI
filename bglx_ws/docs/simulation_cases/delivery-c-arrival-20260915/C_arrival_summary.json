@@ -1,0 +1,48 @@
+{
+  "destination": "DELIVERY_C",
+  "action_status": 4,
+  "navigation_requested": true,
+  "success": true,
+  "route": [
+    [
+      28.0,
+      82.0,
+      74.65
+    ]
+  ],
+  "behavior_tree": "/home/ros2/bglx_navtest/logs/continue_C_outside_20260915_180707_644264/navigate_C_remaining.xml",
+  "latest_terrain": {
+    "state": "POSITIVE_OBSTACLE",
+    "hazard": true,
+    "hard_stop": false,
+    "hazard_distance_m": 4.843261647619465,
+    "hard_stop_distance_m": 2.4,
+    "positive_points": 896,
+    "positive_height_cm": 45.72807256505878,
+    "negative_points": 0,
+    "negative_depth_cm": null,
+    "missing_ground": false,
+    "deep_return_confirmed": false,
+    "estimated_drop_edge_m": null,
+    "missing_bins": 0,
+    "ground_plane_a": 0.00372,
+    "ground_plane_b": 0.0,
+    "ground_plane_c": -0.000702,
+    "local_ground_grade_percent": 0.372,
+    "ground_points": 37117,
+    "roi_points": 53993
+  },
+  "start_pose_xy_yaw_rad": [
+    28.09278696461712,
+    48.72067225165793,
+    1.4873405474927608
+  ],
+  "final_pose_xy_yaw_rad": [
+    27.97006078077473,
+    81.69355063175364,
+    1.5827670598279557
+  ],
+  "goal_error_m": 0.3079083827153999,
+  "cleanup_settled": true,
+  "stopped_confirmed": true
+}

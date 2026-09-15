@@ -1,12 +1,27 @@
 <root main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <!-- Keep one path during execution.
-         Failures propagate to the mission client.
-         No automatic clearing, backup, or periodic replanning. -->
-    <Sequence name="PlanOnceAndFollow">
-      <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
-      <FollowPath path="{path}" controller_id="FollowPath"
-                  goal_checker_id="general_goal_checker"/>
-    </Sequence>
+    <RecoveryNode number_of_retries="2" name="BoundedReplanRecovery">
+      <PipelineSequence name="ReplanAndFollow">
+        <RateController hz="2.0">
+          <Fallback name="KeepValidPath">
+            <ReactiveSequence name="CheckPathAndGoal">
+              <Inverter>
+                <GlobalUpdatedGoal/>
+              </Inverter>
+              <IsPathValid path="{path}"/>
+            </ReactiveSequence>
+            <ComputePathToPose goal="{goal}" path="{path}"
+                               planner_id="GridBased"/>
+          </Fallback>
+        </RateController>
+        <FollowPath path="{path}" controller_id="FollowPath"
+                    goal_checker_id="general_goal_checker"/>
+      </PipelineSequence>
+      <Sequence name="WaitThenReplan">
+        <Wait wait_duration="1.0"/>
+        <ComputePathToPose goal="{goal}" path="{path}"
+                           planner_id="GridBased"/>
+      </Sequence>
+    </RecoveryNode>
   </BehaviorTree>
 </root>

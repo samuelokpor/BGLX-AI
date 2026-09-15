@@ -1,0 +1,35 @@
+{
+  "checkpoint": "sim-delivery-c-arrival-20260915",
+  "destination": "DELIVERY_C",
+  "C_arrival": "succeeded",
+  "goal_error_m": 0.3079083827153999,
+  "continuation_cruise_m_s": 0.4,
+  "stopped_confirmed": true,
+  "ground_extension_persisted": true,
+  "return_home_070": "not run at this checkpoint",
+  "parcel_unloading_at_C": "not performed by standalone continuation",
+  "waypoints_xy": {
+    "HOME": [
+      0.0,
+      0.0
+    ],
+    "PICKUP_A": [
+      5.514,
+      0.098
+    ],
+    "DELIVERY_A": [
+      4.969,
+      5.492
+    ],
+    "BUILDING_B": [
+      -0.8740772277744706,
+      59.19252892678175
+    ],
+    "DELIVERY_C": [
+      28.0,
+      82.0
+    ]
+  },
+  "source_arrival_summary": "/home/ros2/bglx_navtest/logs/continue_C_outside_20260915_180707_644264/summary.json",
+  "source_ground_summary": "/home/ros2/bglx_navtest/logs/ground_extension_20260915_180653_474322/summary.json"
+}

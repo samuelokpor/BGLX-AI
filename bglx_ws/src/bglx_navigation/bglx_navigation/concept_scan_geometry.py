@@ -7,9 +7,9 @@ import math
 import xml.etree.ElementTree as ET
 import numpy as np
 
-FRONT_X = 1.63
-REAR_X = -0.38
-HALF_WIDTH = 0.52
+FRONT_X = 1.04
+REAR_X = -0.20
+HALF_WIDTH = 0.285
 
 
 def quaternion_matrix(x, y, z, w):

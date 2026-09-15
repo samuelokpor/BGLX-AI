@@ -10,10 +10,10 @@ controller_manager:
 tricycle_steering_controller:
   ros__parameters:
     use_sim_time: true
-    wheelbase: 1.2
-    wheel_track: 0.74
-    front_wheels_radius: 0.275
-    rear_wheels_radius: 0.275
+    wheelbase: 0.9
+    wheel_track: 0.4967272727272727
+    front_wheels_radius: 0.13
+    rear_wheels_radius: 0.13
     front_steering: true
     front_wheels_names:
     - steering_joint

@@ -6,6 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /MarkerArray1/Topic1
+        - /Path3
       Splitter Ratio: 0.5
     Tree Height: 357
   - Class: rviz_common/Views
@@ -52,36 +54,6 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        accent_front:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        accent_left:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        accent_right:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        aframe_crossbar:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        aframe_leg_left:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        aframe_leg_right:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         base_footprint:
           Alpha: 1
           Show Axes: false
@@ -90,72 +62,16 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        battery_enclosure:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        battery_indicator:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        bms_module:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        camera_front_left:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
           Value: true
         camera_front_main:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
-        camera_front_right:
+        camera_front_main_optical:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
-        camera_rear_left:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        camera_rear_main:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        camera_rear_right:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        cargo_box:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        cargo_handle:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        cargo_lid:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         caster_mount:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        control_panel_backing:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -169,62 +85,7 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-        frame_cargo_rail_left:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        frame_cargo_rail_right:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        frame_front_diagonal:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        frame_head_tube:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        frame_main_spine:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        frame_rear_cross:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        frame_rear_left_vertical:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        frame_rear_right_vertical:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        front_disc:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        front_hubcap:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         front_lidar_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        front_rim:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -234,17 +95,7 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        indicator_light:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         left_depth_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        lidar_base:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -253,68 +104,12 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
-        rear_axle_tube:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         rear_depth_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        rear_left_hub_motor:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_left_hubcap:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_left_rim:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_left_spring:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_left_swingarm:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         rear_left_wheel:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_right_hub_motor:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_right_hubcap:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_right_rim:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_right_spring:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        rear_right_swingarm:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -325,21 +120,6 @@ Visualization Manager:
           Show Trail: false
           Value: true
         right_depth_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        screen:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        sensor_mount_plate:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        steering_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -408,19 +188,80 @@ Visualization Manager:
       Use rainbow: true
       Value: true
     - Class: rviz_default_plugins/TF
-      Enabled: false
+      Enabled: true
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        camera_front_main:
+          Value: true
+        camera_front_main_optical:
+          Value: true
+        caster_mount:
+          Value: true
+        depth_camera:
+          Value: true
+        depth_camera_optical:
+          Value: true
+        front_lidar_link:
+          Value: true
+        front_wheel:
+          Value: true
+        left_depth_link:
+          Value: true
+        lidar_sensor:
+          Value: true
+        map:
+          Value: true
+        odom:
+          Value: true
+        rear_depth_link:
+          Value: true
+        rear_left_wheel:
+          Value: true
+        rear_right_wheel:
+          Value: true
+        right_depth_link:
+          Value: true
       Marker Scale: 0.30000001192092896
       Name: TF
       Show Arrows: false
       Show Axes: true
       Show Names: false
       Tree:
-        {}
+        map:
+          odom:
+            base_link:
+              base_footprint:
+                {}
+              camera_front_main:
+                camera_front_main_optical:
+                  {}
+              caster_mount:
+                front_lidar_link:
+                  {}
+                front_wheel:
+                  {}
+              depth_camera:
+                depth_camera_optical:
+                  {}
+              left_depth_link:
+                {}
+              lidar_sensor:
+                {}
+              rear_depth_link:
+                {}
+              rear_left_wheel:
+                {}
+              rear_right_wheel:
+                {}
+              right_depth_link:
+                {}
       Update Interval: 0
-      Value: false
+      Value: true
     - Alpha: 1
       Buffer Length: 1
       Class: rviz_default_plugins/Path
@@ -563,7 +404,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: RGB8
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -584,7 +425,7 @@ Visualization Manager:
         Value: /etrike/front_depth/points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 0.699999988079071
       Class: rviz_default_plugins/Map
       Color Scheme: map
@@ -627,10 +468,78 @@ Visualization Manager:
         Value: /global_costmap/costmap_updates
       Use Timestamp: false
       Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /supervised_gap/selected_path
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /supervised_gap/audit_display
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /supervised_gap/s_course_plan
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: odom
+    Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
@@ -664,7 +573,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 0.25999996066093445
+      Angle: -0.25999999046325684
       Class: rviz_default_plugins/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -674,7 +583,7 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 55.930580139160156
+      Scale: 37.363304138183594
       Target Frame: base_link
       Value: TopDownOrtho (rviz_default_plugins)
       X: 1.3509068489074707

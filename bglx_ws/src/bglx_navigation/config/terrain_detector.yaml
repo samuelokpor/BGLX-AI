@@ -6,10 +6,10 @@ terrain_detector:
     process_hz: 5.0
     terrain_memory_timeout: 30.0
     terrain_memory_passed_x: -0.5
-    x_min: 1.65
+    x_min: 1.06
     x_max: 5.5
     fit_half_width: 1.25
-    corridor_half_width: 0.52
+    corridor_half_width: 0.285
     ground_fit_x_max: 2.45
     positive_threshold: 0.035
     positive_min_points: 100

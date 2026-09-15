@@ -22,6 +22,8 @@ from std_msgs.msg import String
 import tf2_ros
 from tf2_ros import TransformException
 
+from bglx_agentic.mission_recovery import RecoveryGuard
+
 from bglx_agentic.mission_waypoints import (
     build_delivery_route,
     build_multi_stop_route,
@@ -152,12 +154,12 @@ class DeliveryMission(Node):
 
         self.declare_parameter(
             'unstuck_backup_speed',
-            0.30
+            0.10
         )
 
         self.declare_parameter(
             'unstuck_backup_timeout',
-            10.0
+            20.0
         )
 
         self.declare_parameter(
@@ -442,6 +444,7 @@ class DeliveryMission(Node):
         )
 
         self.active_goal_handle = None
+        self.recovery_guard = RecoveryGuard(self, MAP_QOS)
 
         self.last_feedback_print = 0.0
         self.current_recoveries = 0
@@ -477,6 +480,8 @@ class DeliveryMission(Node):
 
     def _on_slam_map(self, msg):
 
+        self.exploration_slam = (msg, time.monotonic())
+
         self.slam_bounds = (
             self._bounds_from_grid(msg)
         )
@@ -488,6 +493,8 @@ class DeliveryMission(Node):
         self.slam_info = msg.info
 
     def _on_global_costmap(self, msg):
+
+        self.exploration_costmap = (msg, time.monotonic())
 
         self.costmap_bounds = (
             self._bounds_from_grid(msg)
@@ -597,181 +604,8 @@ class DeliveryMission(Node):
             math.cos(angle)
         )
 
-    def _safe_backup(
-        self,
-        reason
-    ):
-        """Run Nav2 BackUp only when no NavigateToPose is active."""
-
-        if self.active_goal_handle is not None:
-
-            print(
-                '[unstuck] REFUSED backup: '
-                'NavigateToPose is still active.'
-            )
-
-            return False
-
-        if not self.backup_client.wait_for_server(
-            timeout_sec=1.0
-        ):
-
-            print(
-                '[unstuck] /backup action server '
-                'is unavailable; continuing with Nav2.'
-            )
-
-            return False
-
-        print()
-        print(
-            '[unstuck] BACKUP: %s'
-            % reason
-        )
-
-        print(
-            '[unstuck] requesting %.2fm reverse '
-            'at %.2fm/s'
-            % (
-                self.unstuck_backup_distance,
-                self.unstuck_backup_speed,
-            )
-        )
-
-        goal = BackUp.Goal()
-
-        # BackUp target is expressed behind the robot.
-        goal.target.x = (
-            -abs(
-                self.unstuck_backup_distance
-            )
-        )
-        goal.target.y = 0.0
-        goal.target.z = 0.0
-
-        goal.speed = abs(
-            self.unstuck_backup_speed
-        )
-
-        seconds = int(
-            self.unstuck_backup_timeout
-        )
-
-        nanoseconds = int(
-            (
-                self.unstuck_backup_timeout
-                - seconds
-            )
-            * 1_000_000_000
-        )
-
-        goal.time_allowance.sec = seconds
-        goal.time_allowance.nanosec = nanoseconds
-
-        send_future = (
-            self.backup_client.
-            send_goal_async(goal)
-        )
-
-        rclpy.spin_until_future_complete(
-            self,
-            send_future,
-            timeout_sec=3.0
-        )
-
-        if not send_future.done():
-
-            print(
-                '[unstuck] FAIL: /backup did not '
-                'answer within 3 seconds.'
-            )
-
-            return False
-
-        handle = send_future.result()
-
-        if (
-            handle is None
-            or not handle.accepted
-        ):
-
-            print(
-                '[unstuck] FAIL: backup goal rejected.'
-            )
-
-            return False
-
-        result_future = (
-            handle.get_result_async()
-        )
-
-        deadline = (
-            time.monotonic()
-            + self.unstuck_backup_timeout
-            + 2.0
-        )
-
-        while (
-            rclpy.ok()
-            and not result_future.done()
-            and time.monotonic() < deadline
-        ):
-
-            rclpy.spin_once(
-                self,
-                timeout_sec=0.10
-            )
-
-        if not result_future.done():
-
-            print(
-                '[unstuck] FAIL: backup timed out.'
-            )
-
-            try:
-
-                cancel_future = (
-                    handle.cancel_goal_async()
-                )
-
-                rclpy.spin_until_future_complete(
-                    self,
-                    cancel_future,
-                    timeout_sec=2.0
-                )
-
-            except Exception:
-                pass
-
-            return False
-
-        wrapped = result_future.result()
-
-        if (
-            wrapped is not None
-            and wrapped.status
-            == GoalStatus.STATUS_SUCCEEDED
-        ):
-
-            print(
-                '[unstuck] BACKUP SUCCEEDED.'
-            )
-
-            return True
-
-        status = (
-            wrapped.status
-            if wrapped is not None
-            else -1
-        )
-
-        print(
-            '[unstuck] backup finished '
-            'without success, status=%d.'
-            % status
-        )
-
-        return False
+    def _safe_backup(self, reason):
+        return self.recovery_guard.backup(reason)
 
     def _maybe_turnaround_assist(
         self,
@@ -1181,66 +1015,8 @@ class DeliveryMission(Node):
     # Cancel active navigation goal
     # ======================================================
 
-    def cancel_active_goal(
-        self,
-        result_future=None
-    ):
-        """Cancel active NavigateToPose and wait for it to settle."""
-
-        if self.active_goal_handle is None:
-            return True
-
-        try:
-
-            cancel_future = (
-                self.active_goal_handle.
-                cancel_goal_async()
-            )
-
-            rclpy.spin_until_future_complete(
-                self,
-                cancel_future,
-                timeout_sec=3.0
-            )
-
-        except Exception as exc:
-
-            print(
-                '[unstuck] navigation cancel error: %s'
-                % exc
-            )
-
-            return False
-
-        if (
-            result_future is not None
-            and not result_future.done()
-        ):
-
-            rclpy.spin_until_future_complete(
-                self,
-                result_future,
-                timeout_sec=4.0
-            )
-
-        settled = (
-            result_future is None
-            or result_future.done()
-        )
-
-        if settled:
-
-            self.active_goal_handle = None
-
-        else:
-
-            print(
-                '[unstuck] WARNING: navigation action '
-                'did not settle after cancellation. '
-                'Backup will NOT be commanded.'
-            )
-
-        return settled
+    def cancel_active_goal(self, result_future=None):
+        return self.recovery_guard.cancel_navigation(result_future)
 
     # ======================================================
     # Navigate one mission leg
@@ -1253,6 +1029,7 @@ class DeliveryMission(Node):
     ):
 
         x, y, yaw = waypoint
+        self.recovery_guard.ready()
 
         self.current_recoveries = 0
         self.last_feedback_print = 0.0
@@ -1348,22 +1125,7 @@ class DeliveryMission(Node):
                 )
             )
 
-            rclpy.spin_until_future_complete(
-                self,
-                send_future,
-                timeout_sec=5.0
-            )
-
-            if not send_future.done():
-
-                print(
-                    'FAIL: Nav2 did not answer goal request '
-                    'within 5 seconds'
-                )
-
-                return False
-
-            handle = send_future.result()
+            handle = self.recovery_guard.resolve_send(send_future, 'navigation', 5.0)
 
             if (
                 handle is None
@@ -1386,6 +1148,8 @@ class DeliveryMission(Node):
             result_future = (
                 handle.get_result_async()
             )
+
+            self.recovery_guard.nav_result = result_future
 
             anchor_pose = (
                 self._current_pose()
@@ -1575,11 +1339,15 @@ class DeliveryMission(Node):
                     assist_budget_logged = True
 
             if restart_same_goal:
+                self.recovery_guard.ready()
                 continue
 
+            if not result_future.done():
+                self.recovery_guard.fail('navigation ended without a terminal result')
             wrapped = result_future.result()
 
-            self.active_goal_handle = None
+            if not self.recovery_guard.cancel_navigation(result_future):
+                self.recovery_guard.fail('terminal navigation did not confirm stopped')
 
             if wrapped is None:
 
@@ -1591,6 +1359,10 @@ class DeliveryMission(Node):
                 return False
 
             status = wrapped.status
+            result = wrapped.result
+            for field in ('error_code', 'error_msg'):
+                if hasattr(result, field):
+                    print('[mission-supervisor] Nav2 %s=%s' % (field, getattr(result, field)), flush=True)
 
             print(
                 '%s result: '
@@ -1622,286 +1394,14 @@ class DeliveryMission(Node):
     # Goal-directed SLAM exploration for one mission leg
     # ======================================================
 
-    def navigate_with_exploration(
-        self,
-        destination_name,
-        waypoint
-    ):
-        """Navigate one mission leg, extending SLAM toward it if necessary.
-
-        The destination never changes. Intermediate goals are only temporary
-        staging points selected along the direction of the original waypoint.
-        """
-
-        final_x, final_y, final_yaw = waypoint
-
-        if not self._wait_for_navigation_context(
-            timeout=4.0
-        ):
-
-            print(
-                'EXPLORATION CONTEXT unavailable; '
-                'falling back to direct Nav2 goal.'
-            )
-
-            return self.navigate(
-                destination_name,
-                waypoint
-            )
-
-        initial_pose = (
-            self._current_pose()
-        )
-
-        if initial_pose is None:
-
-            print(
-                'FAIL: no map-frame pose available '
-                'for exploration'
-            )
-
-            return False
-
+    def navigate_with_exploration(self, destination_name, waypoint):
+        """Navigate directly to the fixed destination; no exploration stages."""
         print(
-            '[explore] %s final goal=(%.3f, %.3f), '
-            'distance=%.2fm'
-            % (
-                destination_name,
-                final_x,
-                final_y,
-                math.hypot(
-                    final_x - initial_pose[0],
-                    final_y - initial_pose[1],
-                ),
-            )
+            "[mission-supervisor] DIRECT GOAL: %s (%.3f, %.3f)"
+            % (destination_name, waypoint[0], waypoint[1]),
+            flush=True,
         )
-
-        completed_stages = 0
-
-        for stage_number in range(
-            1,
-            EXPLORATION_MAX_STAGES + 1
-        ):
-
-            pose = self._current_pose()
-            bounds = self._navigation_bounds()
-
-            if (
-                pose is None
-                or bounds is None
-            ):
-
-                print(
-                    'FAIL: exploration lost pose '
-                    'or map bounds'
-                )
-
-                return False
-
-            remaining_before = math.hypot(
-                final_x - pose[0],
-                final_y - pose[1],
-            )
-
-            # The real destination has entered the current map.
-            if self._point_in_bounds(
-                final_x,
-                final_y,
-                bounds
-            ):
-
-                print(
-                    '[explore] %s final goal is now '
-                    'inside the live map after %d stage(s).'
-                    % (
-                        destination_name,
-                        completed_stages,
-                    )
-                )
-
-                return self.navigate(
-                    destination_name,
-                    waypoint
-                )
-
-            (
-                stage_x,
-                stage_y,
-                stage_distance,
-            ) = self._frontier_stage_goal(
-                pose[0],
-                pose[1],
-                final_x,
-                final_y,
-                bounds
-            )
-
-            if (
-                stage_distance
-                < EXPLORATION_MIN_STAGE
-            ):
-
-                print(
-                    '[explore] %s reached the current '
-                    'frontier; waiting for SLAM expansion...'
-                    % destination_name
-                )
-
-                if self._wait_for_more_exploration_room(
-                    final_x,
-                    final_y
-                ):
-                    continue
-
-                print(
-                    'FAIL: %s exploration stopped safely: '
-                    'SLAM did not expose more usable map '
-                    'within %.1fs.'
-                    % (
-                        destination_name,
-                        EXPLORATION_MAP_WAIT,
-                    )
-                )
-
-                return False
-
-            stage_yaw = math.atan2(
-                final_y - stage_y,
-                final_x - stage_x
-            )
-
-            stage_name = (
-                '%s_EXPLORE_%d'
-                % (
-                    destination_name,
-                    stage_number,
-                )
-            )
-
-            print(
-                '[explore] stage %d for %s: '
-                'current=(%.2f, %.2f) '
-                'stage=(%.2f, %.2f) '
-                'stage_distance=%.2fm '
-                'final_remaining=%.2fm'
-                % (
-                    stage_number,
-                    destination_name,
-                    pose[0],
-                    pose[1],
-                    stage_x,
-                    stage_y,
-                    stage_distance,
-                    remaining_before,
-                )
-            )
-
-            if not self.navigate(
-                stage_name,
-                (
-                    stage_x,
-                    stage_y,
-                    stage_yaw,
-                )
-            ):
-
-                print(
-                    'FAIL: exploration stage %d '
-                    'toward %s failed'
-                    % (
-                        stage_number,
-                        destination_name,
-                    )
-                )
-
-                return False
-
-            completed_stages += 1
-
-            after = self._current_pose()
-
-            if after is None:
-
-                print(
-                    'FAIL: pose unavailable after '
-                    'exploration stage %d'
-                    % stage_number
-                )
-
-                return False
-
-            remaining_after = math.hypot(
-                final_x - after[0],
-                final_y - after[1],
-            )
-
-            progress = (
-                remaining_before
-                - remaining_after
-            )
-
-            print(
-                '[explore] stage %d complete: '
-                'reached=(%.2f, %.2f), '
-                'progress=%.2fm, '
-                'remaining=%.2fm'
-                % (
-                    stage_number,
-                    after[0],
-                    after[1],
-                    progress,
-                    remaining_after,
-                )
-            )
-
-            if (
-                progress
-                < EXPLORATION_MIN_PROGRESS
-            ):
-
-                print(
-                    'FAIL: exploration stage %d made '
-                    'only %.2fm progress toward %s; '
-                    'refusing to loop.'
-                    % (
-                        stage_number,
-                        progress,
-                        destination_name,
-                    )
-                )
-
-                return False
-
-            settle_deadline = (
-                time.monotonic()
-                + EXPLORATION_SETTLE
-            )
-
-            while (
-                rclpy.ok()
-                and time.monotonic()
-                < settle_deadline
-            ):
-
-                rclpy.spin_once(
-                    self,
-                    timeout_sec=0.10
-                )
-
-        print(
-            'FAIL: %s exploration exceeded safety '
-            'limit of %d stages'
-            % (
-                destination_name,
-                EXPLORATION_MAX_STAGES,
-            )
-        )
-
-        return False
-
-    # ======================================================
-    # Navigate with controlled retry
-    # ======================================================
+        return self.navigate(destination_name, waypoint)
 
     def navigate_with_retry(
         self,
@@ -2409,7 +1909,7 @@ def main(args=None):
 
     finally:
 
-        node.cancel_active_goal()
+        node.recovery_guard.cleanup()
 
         finished_epoch = time.time()
         finished_at = utc_now_iso()

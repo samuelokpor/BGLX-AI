@@ -34,8 +34,8 @@ class CmdVelLimiter(Node):
     def __init__(self):
         super().__init__('cmd_vel_limiter')
 
-        self.declare_parameter('wheelbase', 1.20)
-        self.declare_parameter('max_steering_angle', 1.047)
+        self.declare_parameter('wheelbase', 0.90)
+        self.declare_parameter('max_steering_angle', 1.0471975511965976)
         self.declare_parameter('max_lateral_accel', 1.5)
         self.declare_parameter('max_linear_vel', 2.78)
         self.declare_parameter('min_speed_for_steer', 0.05)
@@ -54,7 +54,7 @@ class CmdVelLimiter(Node):
         self.declare_parameter('front_scan_topic', '/etrike/front_scan')
         self.declare_parameter('front_stop_distance', 1.0)
         self.declare_parameter('front_stop_half_angle_deg', 45.0)
-        self.declare_parameter('front_corridor_half_width', 0.52)
+        self.declare_parameter('front_corridor_half_width', 0.285)
         # --- speed-scaled clearance cap (test feature, default off) ---
         self.declare_parameter('use_speed_scaled_cap', False)
         self.declare_parameter('cap_margin', 0.25)

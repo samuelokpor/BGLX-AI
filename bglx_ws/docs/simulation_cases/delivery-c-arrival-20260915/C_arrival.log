@@ -1,0 +1,58 @@
+[terrain] {"state": "POSITIVE_OBSTACLE", "hazard": true, "hard_stop": false, "hazard_distance_m": 4.843261647619465, "hard_stop_distance_m": 2.4, "positive_points": 896, "positive_height_cm": 45.72278036039933, "negative_points": 0, "negative_depth_cm": null, "missing_ground": false, "deep_return_confirmed": false, "estimated_drop_edge_m": null, "missing_bins": 0, "ground_plane_a": 0.003733, "ground_plane_b": -0.0, "ground_plane_c": -0.000714, "local_ground_grade_percent": 0.373, "ground_points": 37117, "roi_points": 53993}
+[mission-supervisor] STOP CONFIRMED by fresh odometry
+Fresh terrain check: ground fitted; hard_stop=false.
+TRIKE WILL MOVE: current outside pose -> DELIVERY_C (28, 82); 0.4 m/s.
+Ctrl-C requests cancellation and waits for a confirmed stop.
+Goal accepted by Nav2.
+Following the remaining route to DELIVERY_C.
+pose=(28.09, 48.72) remaining=33.45m poses_left=1 recoveries=0
+pose=(28.05, 49.42) remaining=32.80m poses_left=1 recoveries=0
+pose=(27.96, 50.21) remaining=32.01m poses_left=1 recoveries=0
+pose=(27.89, 50.92) remaining=31.23m poses_left=1 recoveries=0
+pose=(27.82, 51.71) remaining=30.44m poses_left=1 recoveries=0
+pose=(27.76, 52.50) remaining=29.66m poses_left=1 recoveries=0
+pose=(27.69, 53.34) remaining=28.88m poses_left=1 recoveries=0
+[mission-supervisor] SERVER planner_server: Planner loop missed its desired rate of 20.0000 Hz. Current loop rate is 14.2857 Hz
+pose=(27.66, 54.15) remaining=28.29m poses_left=1 recoveries=0
+pose=(27.77, 54.94) remaining=27.50m poses_left=1 recoveries=0
+pose=(27.85, 55.72) remaining=26.72m poses_left=1 recoveries=0
+pose=(27.92, 56.49) remaining=25.93m poses_left=1 recoveries=0
+pose=(27.98, 57.28) remaining=25.15m poses_left=1 recoveries=0
+pose=(28.05, 58.03) remaining=24.36m poses_left=1 recoveries=0
+pose=(28.12, 58.87) remaining=23.58m poses_left=1 recoveries=0
+pose=(28.19, 59.65) remaining=22.80m poses_left=1 recoveries=0
+pose=(28.26, 60.44) remaining=22.01m poses_left=1 recoveries=0
+pose=(28.33, 61.20) remaining=21.23m poses_left=1 recoveries=0
+[mission-supervisor] SERVER planner_server: Planner loop missed its desired rate of 20.0000 Hz. Current loop rate is 9.0909 Hz
+pose=(28.38, 61.95) remaining=20.20m poses_left=1 recoveries=0
+pose=(28.31, 62.73) remaining=19.41m poses_left=1 recoveries=0
+pose=(28.22, 63.52) remaining=18.63m poses_left=1 recoveries=0
+pose=(28.15, 64.31) remaining=17.84m poses_left=1 recoveries=0
+pose=(28.09, 65.06) remaining=17.06m poses_left=1 recoveries=0
+pose=(28.02, 65.90) remaining=16.27m poses_left=1 recoveries=0
+pose=(27.95, 66.70) remaining=15.36m poses_left=1 recoveries=0
+pose=(27.88, 67.49) remaining=14.57m poses_left=1 recoveries=0
+pose=(27.81, 68.28) remaining=13.79m poses_left=1 recoveries=0
+[mission-supervisor] SERVER planner_server: Planner loop missed its desired rate of 20.0000 Hz. Current loop rate is 14.2857 Hz
+pose=(27.74, 69.08) remaining=12.92m poses_left=1 recoveries=0
+pose=(27.77, 69.88) remaining=12.14m poses_left=1 recoveries=0
+pose=(27.86, 70.66) remaining=11.35m poses_left=1 recoveries=0
+pose=(27.93, 71.47) remaining=10.57m poses_left=1 recoveries=0
+pose=(28.00, 72.27) remaining=9.79m poses_left=1 recoveries=0
+pose=(28.07, 73.06) remaining=9.00m poses_left=1 recoveries=0
+pose=(28.14, 73.85) remaining=8.22m poses_left=1 recoveries=0
+pose=(28.21, 74.65) remaining=7.30m poses_left=1 recoveries=0
+pose=(28.28, 75.45) remaining=6.52m poses_left=1 recoveries=0
+pose=(28.35, 76.25) remaining=5.74m poses_left=1 recoveries=0
+pose=(28.39, 77.05) remaining=4.94m poses_left=1 recoveries=0
+pose=(28.33, 77.83) remaining=4.16m poses_left=1 recoveries=0
+pose=(28.24, 78.63) remaining=3.37m poses_left=1 recoveries=0
+pose=(28.16, 79.41) remaining=2.58m poses_left=1 recoveries=0
+pose=(28.09, 80.22) remaining=1.79m poses_left=1 recoveries=0
+pose=(28.02, 81.00) remaining=1.00m poses_left=1 recoveries=0
+pose=(27.97, 81.56) remaining=0.43m poses_left=1 recoveries=0
+[mission-supervisor] STOP CONFIRMED by fresh odometry
+[mission-supervisor] navigation settled
+[mission-supervisor] STOP CONFIRMED by fresh odometry
+Summary: /home/ros2/bglx_navtest/logs/continue_C_outside_20260915_180707_644264/summary.json
+ARRIVED AT C; STOP CONFIRMED. Goal error=0.308m

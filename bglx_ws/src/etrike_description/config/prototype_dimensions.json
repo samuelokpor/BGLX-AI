@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "wheelbase_m": 0.9,
+  "rear_overhang_m": 0.2,
+  "straight_length_m": 1.23,
+  "outside_width_m": 0.57,
+  "wheel_radius_m": 0.13,
+  "estimated_rear_hub_width_m": 0.07327272727272727,
+  "rear_track_m": 0.4967272727272727,
+  "mass_kg": 40,
+  "payload_kg": 0,
+  "steering_limit_rad": 1.0471975511965976,
+  "footprint": [
+    [
+      -0.2,
+      -0.285
+    ],
+    [
+      1.04,
+      -0.285
+    ],
+    [
+      1.04,
+      0.285
+    ],
+    [
+      -0.2,
+      0.285
+    ]
+  ],
+  "planner_min_radius_m": 0.75,
+  "notes": "Geometry proxy. Tyre/hub width and mass distribution estimated. Upper body remains a concept proxy, lowered 0.145m for the smaller wheels. Existing conservative 0.75m planner minimum radius retained."
+}
