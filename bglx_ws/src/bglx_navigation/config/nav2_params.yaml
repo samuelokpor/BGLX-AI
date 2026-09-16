@@ -31,7 +31,7 @@ controller_server:
       yaw_goal_tolerance: 3.15
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 0.7
+      desired_linear_vel: 0.95
       lookahead_dist: 0.6
       min_lookahead_dist: 0.6
       max_lookahead_dist: 1.2
@@ -45,8 +45,11 @@ controller_server:
       min_approach_linear_velocity: 0.1
       approach_velocity_scaling_dist: 1.0
       use_regulated_linear_velocity_scaling: true
-      use_cost_regulated_linear_velocity_scaling: false
-      regulated_linear_scaling_min_radius: 1.0
+      use_cost_regulated_linear_velocity_scaling: true
+      cost_scaling_dist: 1.2
+      cost_scaling_gain: 1.0
+      inflation_cost_scaling_factor: 3.0
+      regulated_linear_scaling_min_radius: 2.0
       regulated_linear_scaling_min_speed: 0.25
       max_angular_accel: 2.0
       max_robot_pose_search_dist: 10.0
@@ -242,7 +245,7 @@ planner_server:
       analytic_expansion_max_length: 5.0
       minimum_turning_radius: 0.75
       reverse_penalty: 2.0
-      change_penalty: 3.0
+      change_penalty: 0.0
       non_straight_penalty: 1.2
       cost_penalty: 2.0
       retrospective_penalty: 0.015

@@ -20,4 +20,5 @@
   </export>
   <depend>bglx_msgs</depend>
   <exec_depend>bglx_navigation</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
 </package>

@@ -23,6 +23,7 @@ import tf2_ros
 from tf2_ros import TransformException
 
 from bglx_agentic.mission_recovery import RecoveryGuard
+from bglx_agentic.passage_alignment import PassageAlignment
 
 from bglx_agentic.mission_waypoints import (
     build_delivery_route,
@@ -445,6 +446,7 @@ class DeliveryMission(Node):
 
         self.active_goal_handle = None
         self.recovery_guard = RecoveryGuard(self, MAP_QOS)
+        self.passage_alignment = PassageAlignment(self)
 
         self.last_feedback_print = 0.0
         self.current_recoveries = 0
@@ -1075,6 +1077,7 @@ class DeliveryMission(Node):
             + self.leg_timeout
         )
 
+        self.passage_alignment.begin_leg(waypoint)
         early_unstuck_count = 0
         assist_budget_logged = False
 
@@ -1192,6 +1195,17 @@ class DeliveryMission(Node):
                     )
 
                     return False
+
+                # Take ownership only after the Nav2 action has terminally settled.
+                candidate = self.passage_alignment.poll()
+                if candidate is not None and not result_future.done():
+                    if not self.recovery_guard.cancel_navigation(result_future):
+                        return False
+                    if not self.passage_alignment.perform(candidate, navigation_deadline):
+                        print('FAIL: live passage alignment did not complete', flush=True)
+                        return False
+                    restart_same_goal = True
+                    break
 
                 # ------------------------------------------
                 # EARLY STUCK DETECTOR
@@ -1812,7 +1826,8 @@ class DeliveryMission(Node):
 
 def main(args=None):
 
-    rclpy.init(args=args)
+    from rclpy.signals import SignalHandlerOptions
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
 
     node = DeliveryMission()
 
