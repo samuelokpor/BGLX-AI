@@ -119,7 +119,7 @@ class RecoveryGuard:
         if not self.stopped():
             self.fail('robot not confirmed stopped before action')
         for name, client in self.clients.items():
-            if not client.wait_for_service(timeout_sec=1.0):
+            if not client.wait_for_service(timeout_sec=5.0):
                 raise RuntimeError('lifecycle unavailable: '+name)
             future = client.call_async(GetState.Request())
             rclpy.spin_until_future_complete(self.node, future, timeout_sec=10.0)

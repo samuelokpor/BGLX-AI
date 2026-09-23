@@ -164,6 +164,13 @@ class PassageAlignment:
         if points is None:
             self.guard.event('PASSAGE ALIGN refused: no footprint-clear, forward-curvature connector')
             return False
+        return self.follow_checked(points, frame, leg_deadline, gate.heading)
+
+    def follow_checked(self, points, frame, leg_deadline, target_heading):
+        """Shared existing follower for passage and observation manoeuvres."""
+        if self.node.active_goal_handle is not None:
+            self.guard.fail('manoeuvre requested before navigation settled')
+        self.guard.ready()
         if time.monotonic() >= leg_deadline:
             return False
         if not self.client.wait_for_server(timeout_sec=3.):
@@ -203,7 +210,7 @@ class PassageAlignment:
             self.node.active_goal_handle = handle
             result = handle.get_result_async()
             self.guard.nav_result = result
-            self.guard.event('PASSAGE ALIGN: following audited approach and crossing at <=0.25m/s')
+            self.guard.event('PASSAGE ALIGN: following audited manoeuvre at <=0.25m/s')
             deadline = min(leg_deadline, time.monotonic()+90.)
             last_index, last_check = 0, 0.
             while rclpy.ok() and not result.done():
@@ -252,7 +259,7 @@ class PassageAlignment:
                 self.guard.fail('alignment not settled; retained low-speed settings')
         if ok:
             final = self.guard.transform(frame, 'base_footprint')
-            if math.dist(final[:2], points[-1][:2]) > .4 or abs(wrap(final[2]-gate.heading)) > .15:
+            if math.dist(final[:2], points[-1][:2]) > .4 or abs(wrap(final[2]-target_heading)) > .15:
                 raise RuntimeError('alignment endpoint outside checked exit tolerance')
-            self.guard.event('PASSAGE ALIGN complete; resuming original mission destination')
+            self.guard.event('AUDITED MANOEUVRE complete')
         return ok

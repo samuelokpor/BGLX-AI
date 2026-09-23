@@ -1,8 +1,11 @@
 """Conservative, ROS-independent straight reverse footprint audit.
 
-OccupancyGrid values are -1..100, NOT raw Nav2 0..255 costs. The
-inscribed-cost value 99 is rejected as well as lethal 100. All cells
-intersecting the swept rectangle are tested, including its interior.
+OccupancyGrid values are -1..100, NOT raw Nav2 0..255 costs.
+Cost 99 represents inscribed inflation, not an obstacle cell. Since this
+function tests the FULL swept body plus its supplied margin, rejecting 99
+would count robot clearance twice. Reject unknown and lethal cells instead.
+Every intersecting cell, including the swept interior, is tested. The caller's
+tracking margin, stopping reserve and live sensor checks remain unchanged.
 """
 import math
 
@@ -65,6 +68,6 @@ def audit(grid, pose, distance, bounds=(-0.20, 1.04, 0.285), margin=0.05):
             if not (0 <= ix < width and 0 <= iy < height):
                 return False, 'swept footprint touches grid boundary'
             value = grid.data[iy*width+ix]
-            if value < 0 or value >= 99:
+            if value < 0 or value >= 100:
                 return False, 'unknown/occupied swept cell (%d,%d), cost=%d' % (ix, iy, value)
-    return True, 'full reverse footprint clear'
+    return True, 'full reverse footprint + margin clear of lethal/unknown cells'
