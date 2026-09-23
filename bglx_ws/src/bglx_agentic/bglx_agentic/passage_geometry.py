@@ -44,7 +44,9 @@ class Grid:
                 or self.w <= 0 or self.h <= 0 or len(msg.data) != self.w*self.h):
             raise ValueError('invalid local costmap')
         self.a = np.asarray(msg.data, dtype=np.int16).reshape(self.h, self.w)
-        yy, xx = np.nonzero((self.a < 0) | (self.a >= 99))
+        # Full-body geometry checks physical lethal/unknown cells.
+        # Cost 99 already contains the robot inscribed-radius expansion.
+        yy, xx = np.nonzero((self.a < 0) | (self.a >= 100))
         self.blocked = np.column_stack(((xx+.5)*self.r, (yy+.5)*self.r))
 
     def local(self, p):
@@ -59,6 +61,10 @@ class Grid:
 
     def footprint(self, pose, margin=.15):
         """Exact rectangle/cell SAT, including interiors and touching edges."""
+        # Keep the reference-point inscribed-cost veto.
+        reference_cost = self.cost(pose[0], pose[1])
+        if reference_cost < 0 or reference_cost >= 99:
+            return False
         x, y = self.local(pose)
         a = pose[2]-self.origin[2]
         c, s = math.cos(a), math.sin(a)
@@ -175,20 +181,88 @@ def hermite(start, end, scale):
 
 
 def aligned_path(grid, start, gate):
-    for setback in (1.7, 2.1, 1.4):
+    """Prefer short forward curves through the measured aperture, then setbacks.
+
+    Uses the original Hermite curvature limit and full swept-footprint audit.
+    No change to follower speeds, backup policy, occupancy or freshness limits.
+    """
+    import json
+
+    def length(points):
+        return sum(math.dist(p[:2], q[:2]) for p, q in zip(points, points[1:]))
+
+    def crosses_selected_aperture(points):
+        # Rectangle enlarged by the SAME .15 margin + .013 swept padding as
+        # Grid.path_clear(). Check its intersections with the mouth plane.
+        a = np.asarray(points, dtype=float)
+        if a.ndim != 2 or a.shape[1] != 3 or not np.isfinite(a).all():
+            return False
+        c, s = math.cos(gate.heading), math.sin(gate.heading)
+        dx, dy = a[:, 0]-gate.x, a[:, 1]-gate.y
+        u, v = c*dx+s*dy, -s*dx+c*dy
+        if u[0] >= 0 or u[-1] < 1.49 or np.any(np.diff(u) < -1e-6):
+            return False
+        angle = a[:, 2]-gate.heading
+        ca, sa = np.cos(angle), np.sin(angle)
+        corners = ((-.363, -.448), (1.203, -.448),
+                   (1.203, .448), (-.363, .448))
+        us = np.asarray([u+x*ca-y*sa for x, y in corners]).T
+        vs = np.asarray([v+x*sa+y*ca for x, y in corners]).T
+        seen = False
+        for i in range(4):
+            j = (i+1) % 4
+            on = np.abs(us[:, i]) <= 1e-10
+            if np.any(on):
+                seen = True
+                if np.any(np.abs(vs[on, i]) >= gate.width/2):
+                    return False
+            hit = ((us[:, i] < 0) & (us[:, j] > 0)) | ((us[:, i] > 0) & (us[:, j] < 0))
+            if np.any(hit):
+                seen = True
+                t = -us[hit, i]/(us[hit, j]-us[hit, i])
+                lateral = vs[hit, i]+t*(vs[hit, j]-vs[hit, i])
+                if np.any(np.abs(lateral) >= gate.width/2):
+                    return False
+        return seen
+
+    if (not all(math.isfinite(v) for v in (*start, gate.x, gate.y, gate.heading, gate.width))
+            or not 1.0 <= gate.width <= 2.1):
+        return None
+    choices = []
+    rejected = {'curvature_or_heading': 0, 'length': 0, 'aperture': 0, 'costmap': 0}
+    # First allow a continuous curve into the exit, or a tangent at the mouth.
+    # Retain every original setback/scale as additional candidates.
+    for setback in (-1.5, 0., 1.7, 2.1, 1.4):
         target = gate.at(-setback)
         if math.dist(start[:2], target[:2]) < .35:
             continue
         for scale in (1., 1.4, .75, 1.8):
             curve = hermite(start, target, scale)
             if curve is None:
+                rejected['curvature_or_heading'] += 1
                 continue
-            # Complete the crossing with the rear of the body clear of the throat.
-            straight = [gate.at(float(d)) for d in np.linspace(-setback, 1.5, 160)]
-            points = curve + straight[1:]
-            # Bound local excursions and avoid long looping connectors.
-            if sum(math.dist(p[:2], q[:2]) for p, q in zip(points, points[1:])) > 12:
+            if setback == -1.5:
+                points, strategy = curve, 'continuous_forward'
+            else:
+                straight = [gate.at(float(d)) for d in np.linspace(-setback, 1.5, 160)]
+                points = curve + straight[1:]
+                strategy = 'tangent_at_mouth' if setback == 0 else 'prealigned_forward'
+            distance = length(points)
+            if distance > 12:
+                rejected['length'] += 1
                 continue
-            if grid.path_clear(points):
-                return points
+            if not crosses_selected_aperture(points):
+                rejected['aperture'] += 1
+                continue
+            choices.append((distance, strategy, points))
+    for distance, strategy, points in sorted(choices, key=lambda item: item[0]):
+        if grid.path_clear(points):
+            print('[passage-plan]', json.dumps(dict(
+                strategy=strategy, path_length_m=round(distance, 3),
+                start=list(start), margin_m=.15, min_turn_radius_m=.75,
+                gate=[gate.x, gate.y, gate.heading, gate.width])), flush=True)
+            return points
+        rejected['costmap'] += 1
+    print('[passage-plan]', json.dumps(dict(
+        strategy='no_audited_forward_candidate', rejected=rejected)), flush=True)
     return None
